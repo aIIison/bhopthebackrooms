@@ -48,10 +48,10 @@ namespace bhop {
 		}
 
 		auto set_bool(
-						bool&                                                 target,
-						const std::unordered_map< std::string, std::string >& entries,
-						std::string_view                                      key,
-						std::string&                                          error ) -> void {
+		    bool&                                                 target,
+		    const std::unordered_map< std::string, std::string >& entries,
+		    std::string_view                                      key,
+		    std::string&                                          error ) -> void {
 			const auto found = entries.find( std::string{ key } );
 			if ( found == entries.end( ) ) {
 				return;
@@ -65,10 +65,10 @@ namespace bhop {
 		}
 
 		auto set_double(
-						double&                                               target,
-						const std::unordered_map< std::string, std::string >& entries,
-						std::string_view                                      key,
-						std::string&                                          error ) -> void {
+		    double&                                               target,
+		    const std::unordered_map< std::string, std::string >& entries,
+		    std::string_view                                      key,
+		    std::string&                                          error ) -> void {
 			const auto found = entries.find( std::string{ key } );
 			if ( found == entries.end( ) ) {
 				return;
@@ -154,15 +154,15 @@ namespace bhop {
 		set_bool( result.value.duck_roll, entries, "general.duckroll", error );
 		set_bool( result.value.raw_mouse_input, entries, "general.rawmouseinput", error );
 		set_double(
-						result.value.duck_roll_window,
-						entries,
-						"duckroll.window",
-						error );
+		    result.value.duck_roll_window,
+		    entries,
+		    "duckroll.window",
+		    error );
 		set_double(
-						result.value.duck_roll_height,
-						entries,
-						"duckroll.height",
-						error );
+		    result.value.duck_roll_height,
+		    entries,
+		    "duckroll.height",
+		    error );
 
 		set_double( result.value.move.gravity, entries, "movevars.gravity", error );
 		set_double( result.value.move.friction, entries, "movevars.friction", error );

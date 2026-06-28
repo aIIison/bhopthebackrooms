@@ -18,35 +18,35 @@ namespace bhop {
 		}
 
 		auto accelerate(
-						vec3_t        velocity,
-						const vec3_t& wish_direction,
-						double        wish_speed_cm,
-						double        acceleration,
-						double        delta_seconds ) noexcept -> vec3_t {
+		    vec3_t        velocity,
+		    const vec3_t& wish_direction,
+		    double        wish_speed_cm,
+		    double        acceleration,
+		    double        delta_seconds ) noexcept -> vec3_t {
 			const double current_speed =
-							velocity.x * wish_direction.x + velocity.y * wish_direction.y;
+			    velocity.x * wish_direction.x + velocity.y * wish_direction.y;
 			const double add_speed = wish_speed_cm - current_speed;
 			if ( add_speed <= 0.0 ) {
 				return velocity;
 			}
 
 			const double acceleration_speed =
-							std::min( acceleration * delta_seconds * wish_speed_cm, add_speed );
+			    std::min( acceleration * delta_seconds * wish_speed_cm, add_speed );
 			velocity.x += acceleration_speed * wish_direction.x;
 			velocity.y += acceleration_speed * wish_direction.y;
 			return velocity;
 		}
 
 		auto air_accelerate(
-						vec3_t             velocity,
-						const vec3_t&      wish_direction,
-						double             wish_speed_cm,
-						const move_vars_t& vars,
-						double             delta_seconds ) noexcept -> vec3_t {
+		    vec3_t             velocity,
+		    const vec3_t&      wish_direction,
+		    double             wish_speed_cm,
+		    const move_vars_t& vars,
+		    double             delta_seconds ) noexcept -> vec3_t {
 			const double capped_wish_speed =
-							std::min( wish_speed_cm, source_to_cm( vars.air_wish_speed_cap ) );
+			    std::min( wish_speed_cm, source_to_cm( vars.air_wish_speed_cap ) );
 			const double current_speed =
-							velocity.x * wish_direction.x + velocity.y * wish_direction.y;
+			    velocity.x * wish_direction.x + velocity.y * wish_direction.y;
 			const double add_speed = capped_wish_speed - current_speed;
 			if ( add_speed <= 0.0 ) {
 				return velocity;
@@ -54,17 +54,17 @@ namespace bhop {
 
 			// GoldSrc deliberately uses the uncapped wishspeed in this product.
 			const double acceleration_speed = std::min(
-							vars.air_accelerate * wish_speed_cm * delta_seconds,
-							add_speed );
+			    vars.air_accelerate * wish_speed_cm * delta_seconds,
+			    add_speed );
 			velocity.x += acceleration_speed * wish_direction.x;
 			velocity.y += acceleration_speed * wish_direction.y;
 			return velocity;
 		}
 
 		auto apply_friction(
-						vec3_t             velocity,
-						const move_vars_t& vars,
-						double             delta_seconds ) noexcept -> vec3_t {
+		    vec3_t             velocity,
+		    const move_vars_t& vars,
+		    double             delta_seconds ) noexcept -> vec3_t {
 			const double speed = velocity.horizontal_length( );
 			if ( speed < 0.1 ) {
 				return velocity;
@@ -93,9 +93,9 @@ namespace bhop {
 	}
 
 	auto calculate_velocity(
-					vec3_t                  velocity_cm,
-					const movement_input_t& input,
-					const move_vars_t&      vars ) noexcept -> vec3_t {
+	    vec3_t                  velocity_cm,
+	    const movement_input_t& input,
+	    const move_vars_t&      vars ) noexcept -> vec3_t {
 		const double dt = std::max( 0.0, input.delta_seconds );
 		if ( dt <= 0.0 ) {
 			return velocity_cm;
@@ -106,7 +106,7 @@ namespace bhop {
 		}
 
 		const double raw_length =
-						std::hypot( input.acceleration_cm.x, input.acceleration_cm.y );
+		    std::hypot( input.acceleration_cm.x, input.acceleration_cm.y );
 		if ( raw_length <= epsilon || input.max_input_acceleration_cm <= epsilon ) {
 			return velocity_cm;
 		}
@@ -117,31 +117,31 @@ namespace bhop {
 			0.0,
 		};
 		const double input_amount =
-						std::clamp( raw_length / input.max_input_acceleration_cm, 0.0, 1.0 );
+		    std::clamp( raw_length / input.max_input_acceleration_cm, 0.0, 1.0 );
 		const double wish_speed_source =
-						std::min( vars.move_speed * input_amount, vars.max_speed );
+		    std::min( vars.move_speed * input_amount, vars.max_speed );
 		const double wish_speed_cm = source_to_cm( wish_speed_source );
 
 		if ( input.grounded ) {
 			return accelerate(
-							velocity_cm,
-							wish_direction,
-							wish_speed_cm,
-							vars.accelerate,
-							dt );
+			    velocity_cm,
+			    wish_direction,
+			    wish_speed_cm,
+			    vars.accelerate,
+			    dt );
 		}
 		return air_accelerate(
-						velocity_cm,
-						wish_direction,
-						wish_speed_cm,
-						vars,
-						dt );
+		    velocity_cm,
+		    wish_direction,
+		    wish_speed_cm,
+		    vars,
+		    dt );
 	}
 
 	auto apply_mega_bunny_cap( vec3_t velocity_cm, const move_vars_t& vars ) noexcept -> vec3_t {
 		const double speed = velocity_cm.horizontal_length( );
 		const double maximum =
-						source_to_cm( vars.bunny_max_speed_factor * vars.max_speed );
+		    source_to_cm( vars.bunny_max_speed_factor * vars.max_speed );
 		if ( speed <= maximum || maximum <= 0.0 ) {
 			return velocity_cm;
 		}

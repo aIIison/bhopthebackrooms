@@ -42,13 +42,13 @@ namespace bhop {
 	// CalcVelocity replacement. It updates horizontal velocity only; Unreal remains
 	// responsible for gravity, collision, stepping, floor tests, and replication.
 	[[nodiscard]] auto calculate_velocity(
-					vec3_t                  velocity_cm,
-					const movement_input_t& input,
-					const move_vars_t&      vars ) noexcept -> vec3_t;
+	    vec3_t                  velocity_cm,
+	    const movement_input_t& input,
+	    const move_vars_t&      vars ) noexcept -> vec3_t;
 
 	[[nodiscard]] auto apply_mega_bunny_cap(
-					vec3_t             velocity_cm,
-					const move_vars_t& vars ) noexcept -> vec3_t;
+	    vec3_t             velocity_cm,
+	    const move_vars_t& vars ) noexcept -> vec3_t;
 
 	[[nodiscard]] auto physics_checksum( const move_vars_t& vars ) -> std::uint64_t;
 	[[nodiscard]] auto checksum_hex( std::uint64_t checksum ) -> std::string;

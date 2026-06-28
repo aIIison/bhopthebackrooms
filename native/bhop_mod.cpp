@@ -68,9 +68,9 @@ namespace {
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
 			return character_owner && velocity && acceleration && max_acceleration &&
-			       movement_mode && gravity_scale && jump_z_velocity &&
-			       max_walk_speed && max_walk_speed_crouched && max_sprint_speed &&
-			       wants_to_crouch;
+			    movement_mode && gravity_scale && jump_z_velocity &&
+			    max_walk_speed && max_walk_speed_crouched && max_sprint_speed &&
+			    wants_to_crouch;
 		}
 	};
 
@@ -91,10 +91,10 @@ namespace {
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
 			return pressed_jump && jump_key_hold_time && client_updating &&
-			       was_jumping && can_move && is_dead && is_climbing &&
-			       is_climbing_ladder && is_balancing && is_falling_balance &&
-			       is_pushing && is_crouched &&
-			       wants_to_crouch_after_landing;
+			    was_jumping && can_move && is_dead && is_climbing &&
+			    is_climbing_ladder && is_balancing && is_falling_balance &&
+			    is_pushing && is_crouched &&
+			    wants_to_crouch_after_landing;
 		}
 	};
 
@@ -124,25 +124,25 @@ namespace {
 	}
 
 	[[nodiscard]] auto bool_property( UObject* object, const RC::Unreal::TCHAR* name )
-					-> FBoolProperty* {
+	    -> FBoolProperty* {
 		if ( !object ) {
 			return nullptr;
 		}
 		return RC::Unreal::CastField< FBoolProperty >(
-						object->GetPropertyByNameInChain( name ) );
+		    object->GetPropertyByNameInChain( name ) );
 	}
 
 	[[nodiscard]] auto bool_value(
-					UObject*       object,
-					FBoolProperty* property,
-					bool           fallback = false ) noexcept -> bool {
+	    UObject*       object,
+	    FBoolProperty* property,
+	    bool           fallback = false ) noexcept -> bool {
 		return object && property
-		           ? property->GetPropertyValueInContainer( object )
-		           : fallback;
+		    ? property->GetPropertyValueInContainer( object )
+		    : fallback;
 	}
 
 	[[nodiscard]] auto first_token_lower( const RC::Unreal::TCHAR* command )
-					-> RC::StringType {
+	    -> RC::StringType {
 		RC::StringType result{ command ? command : STR( "" ) };
 		const auto     space = result.find( STR( ' ' ) );
 		if ( space != RC::StringType::npos ) {
@@ -151,7 +151,7 @@ namespace {
 		std::transform( result.begin( ), result.end( ), result.begin( ), []( auto character ) {
 			if ( character >= STR( 'A' ) && character <= STR( 'Z' ) ) {
 				return static_cast< decltype( character ) >(
-								character + ( STR( 'a' ) - STR( 'A' ) ) );
+				    character + ( STR( 'a' ) - STR( 'A' ) ) );
 			}
 			return character;
 		} );
@@ -168,10 +168,10 @@ namespace {
 			return false;
 		}
 		const auto* nt = reinterpret_cast< const IMAGE_NT_HEADERS64* >(
-						module + dos->e_lfanew );
+		    module + dos->e_lfanew );
 		return nt->Signature == IMAGE_NT_SIGNATURE &&
-		       nt->FileHeader.TimeDateStamp == expected_time_date_stamp &&
-		       nt->OptionalHeader.SizeOfImage == expected_size_of_image;
+		    nt->FileHeader.TimeDateStamp == expected_time_date_stamp &&
+		    nt->OptionalHeader.SizeOfImage == expected_size_of_image;
 	}
 
 	[[nodiscard]] auto is_executable_game_address( const void* address ) noexcept -> bool {
@@ -184,16 +184,16 @@ namespace {
 
 		const DWORD protection = information.Protect & 0xff;
 		const bool  executable =
-						protection == PAGE_EXECUTE ||
-						protection == PAGE_EXECUTE_READ ||
-						protection == PAGE_EXECUTE_READWRITE ||
-						protection == PAGE_EXECUTE_WRITECOPY;
+		    protection == PAGE_EXECUTE ||
+		    protection == PAGE_EXECUTE_READ ||
+		    protection == PAGE_EXECUTE_READWRITE ||
+		    protection == PAGE_EXECUTE_WRITECOPY;
 		return executable && information.Type == MEM_IMAGE &&
-		       information.AllocationBase == GetModuleHandleW( nullptr );
+		    information.AllocationBase == GetModuleHandleW( nullptr );
 	}
 
 	auto clear_volatile_pointer_kinds(
-					std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 >& kinds ) noexcept -> void {
+	    std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 >& kinds ) noexcept -> void {
 		constexpr ZydisRegister volatile_registers[]{
 			ZYDIS_REGISTER_RAX,
 			ZYDIS_REGISTER_RCX,
@@ -213,22 +213,22 @@ namespace {
 	// and accept a slot only when the wrapper contains exactly one indirect call
 	// through that context's vtable.
 	[[nodiscard]] auto resolve_calc_velocity_slot( UFunction* function )
-					-> std::optional< std::size_t > {
+	    -> std::optional< std::size_t > {
 		if ( !function ) {
 			return std::nullopt;
 		}
 
 		const auto* code = reinterpret_cast< const std::uint8_t* >(
-						function->GetFuncPtr( ) );
+		    function->GetFuncPtr( ) );
 		if ( !is_executable_game_address( code ) ) {
 			return std::nullopt;
 		}
 
 		ZydisDecoder decoder{};
 		if ( !ZYAN_SUCCESS( ZydisDecoderInit(
-											&decoder,
-											ZYDIS_MACHINE_MODE_LONG_64,
-											ZYDIS_STACK_WIDTH_64 ) ) ) {
+		         &decoder,
+		         ZYDIS_MACHINE_MODE_LONG_64,
+		         ZYDIS_STACK_WIDTH_64 ) ) ) {
 			return std::nullopt;
 		}
 
@@ -241,11 +241,11 @@ namespace {
 			ZydisDecodedInstruction instruction{};
 			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{};
 			if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull(
-												&decoder,
-												code + offset,
-												1024 - offset,
-												&instruction,
-												operands ) ) ) {
+			         &decoder,
+			         code + offset,
+			         1024 - offset,
+			         &instruction,
+			         operands ) ) ) {
 				return std::nullopt;
 			}
 
@@ -259,8 +259,8 @@ namespace {
 				     operand.mem.disp.value >= 0 &&
 				     ( operand.mem.disp.value % sizeof( void* ) ) == 0 ) {
 					candidates.push_back(
-									static_cast< std::size_t >( operand.mem.disp.value ) /
-									sizeof( void* ) );
+					    static_cast< std::size_t >( operand.mem.disp.value ) /
+					    sizeof( void* ) );
 				}
 				clear_volatile_pointer_kinds( kinds );
 			} else if ( instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
@@ -299,20 +299,20 @@ namespace {
 
 		if ( candidates.size( ) != 1 ) {
 			RC::Output::send< RC::LogLevel::Error >(
-							STR( "[bhop] Refused CalcVelocity hook: exec wrapper yielded {} " )
-											STR( "context-vtable call candidates.\n" ),
-							candidates.size( ) );
+			    STR( "[bhop] Refused CalcVelocity hook: exec wrapper yielded {} " )
+			        STR( "context-vtable call candidates.\n" ),
+			    candidates.size( ) );
 			return std::nullopt;
 		}
 		return candidates.front( );
 	}
 
 	void calc_velocity_detour(
-					UObject* movement,
-					float    delta_seconds,
-					float    friction,
-					bool     fluid,
-					float    braking_deceleration );
+	    UObject* movement,
+	    float    delta_seconds,
+	    float    friction,
+	    bool     fluid,
+	    float    braking_deceleration );
 
 	class c_etb_bhop_mod final : public RC::CppUserModBase {
 	public:
@@ -335,37 +335,37 @@ namespace {
 			}
 			if ( !jump_hook_ids_.empty( ) ) {
 				RC::Unreal::UObjectGlobals::UnregisterHook(
-								STR( "/Script/Engine.Character:Jump" ),
-								jump_hook_ids_[ 0 ] );
+				    STR( "/Script/Engine.Character:Jump" ),
+				    jump_hook_ids_[ 0 ] );
 			}
 			if ( jump_hook_ids_.size( ) > 1 ) {
 				RC::Unreal::UObjectGlobals::UnregisterHook(
-								STR( "/Script/Engine.Character:StopJumping" ),
-								jump_hook_ids_[ 1 ] );
+				    STR( "/Script/Engine.Character:StopJumping" ),
+				    jump_hook_ids_[ 1 ] );
 			}
 			if ( !crouch_hook_ids_.empty( ) ) {
 				RC::Unreal::UObjectGlobals::UnregisterHook(
-								STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-												STR( "InpActEvt_Crouch_K2Node_InputActionEvent_1" ),
-								crouch_hook_ids_[ 0 ] );
+				    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
+				        STR( "InpActEvt_Crouch_K2Node_InputActionEvent_1" ),
+				    crouch_hook_ids_[ 0 ] );
 			}
 			if ( crouch_hook_ids_.size( ) > 1 ) {
 				RC::Unreal::UObjectGlobals::UnregisterHook(
-								STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-												STR( "InpActEvt_Crouch_K2Node_InputActionEvent_0" ),
-								crouch_hook_ids_[ 1 ] );
+				    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
+				        STR( "InpActEvt_Crouch_K2Node_InputActionEvent_0" ),
+				    crouch_hook_ids_[ 1 ] );
 			}
 			if ( !mouse_hook_ids_.empty( ) ) {
 				RC::Unreal::UObjectGlobals::UnregisterHook(
-								STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-												STR( "InpAxisEvt_Turn_K2Node_InputAxisEvent_157" ),
-								mouse_hook_ids_[ 0 ] );
+				    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
+				        STR( "InpAxisEvt_Turn_K2Node_InputAxisEvent_157" ),
+				    mouse_hook_ids_[ 0 ] );
 			}
 			if ( mouse_hook_ids_.size( ) > 1 ) {
 				RC::Unreal::UObjectGlobals::UnregisterHook(
-								STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-												STR( "InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ),
-								mouse_hook_ids_[ 1 ] );
+				    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
+				        STR( "InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ),
+				    mouse_hook_ids_[ 1 ] );
 			}
 			if ( hook_target_ ) {
 				MH_DisableHook( hook_target_ );
@@ -379,18 +379,18 @@ namespace {
 
 		auto on_unreal_init( ) -> void override {
 			config_path_ =
-							std::filesystem::path{
-								RC::StringType{
-												RC::UE4SSProgram::get_program( ).get_working_directory( ) }
-							} /
-							STR( "Mods" ) / STR( "bhop" ) / STR( "bhop.ini" );
+			    std::filesystem::path{
+				    RC::StringType{
+				        RC::UE4SSProgram::get_program( ).get_working_directory( ) }
+			    } /
+			    STR( "Mods" ) / STR( "bhop" ) / STR( "bhop.ini" );
 			if ( !reload_config( ) ) {
 				return;
 			}
 			if ( !validate_game_image( ) ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Native hook disabled: Backrooms executable does " )
-												STR( "not match Steam build 23657885.\n" ) );
+				    STR( "[bhop] Native hook disabled: Backrooms executable does " )
+				        STR( "not match Steam build 23657885.\n" ) );
 				return;
 			}
 
@@ -401,56 +401,56 @@ namespace {
 			options.OwnerModName = STR( "bhop" );
 			options.HookName     = STR( "InstallCalcVelocity" );
 			install_tick_id_ =
-							RC::Unreal::Hook::RegisterEngineTickPreCallback(
-											[ this ](
-															auto&,
-															RC::Unreal::UEngine*,
-															float delta_seconds,
-															bool ) {
-												frame_delta_seconds_ = delta_seconds;
-												on_engine_tick( );
-											},
-											std::move( options ) );
+			    RC::Unreal::Hook::RegisterEngineTickPreCallback(
+			        [ this ](
+			            auto&,
+			            RC::Unreal::UEngine*,
+			            float delta_seconds,
+			            bool ) {
+				frame_delta_seconds_ = delta_seconds;
+				on_engine_tick( );
+			},
+			        std::move( options ) );
 
 			RC::Output::send< RC::LogLevel::Normal >(
-							STR( "[bhop] Native adapter loaded; checksum={}. Waiting for a " )
-											STR( "live ETB character to validate CalcVelocity.\n" ),
-							RC::to_wstring( bhop::checksum_hex( bhop::config_checksum( config_ ) ) ) );
+			    STR( "[bhop] Native adapter loaded; checksum={}. Waiting for a " )
+			        STR( "live ETB character to validate CalcVelocity.\n" ),
+			    RC::to_wstring( bhop::checksum_hex( bhop::config_checksum( config_ ) ) ) );
 		}
 
 		auto handle_calc_velocity(
-						UObject* movement,
-						float    delta_seconds,
-						float    friction,
-						bool     fluid,
-						float    braking_deceleration ) -> void {
+		    UObject* movement,
+		    float    delta_seconds,
+		    float    friction,
+		    bool     fluid,
+		    float    braking_deceleration ) -> void {
 			if ( !hook_ready_ || !movement_properties_.complete( ) ||
 			     !character_properties_.complete( ) ) {
 				return call_original(
-								movement,
-								delta_seconds,
-								friction,
-								fluid,
-								braking_deceleration );
+				    movement,
+				    delta_seconds,
+				    friction,
+				    fluid,
+				    braking_deceleration );
 			}
 
 			auto** owner_storage =
-							property_value< UObject* >( movement, movement_properties_.character_owner );
+			    property_value< UObject* >( movement, movement_properties_.character_owner );
 			UObject* owner = owner_storage ? *owner_storage : nullptr;
 			auto*    mode =
-							property_value< std::uint8_t >( movement, movement_properties_.movement_mode );
+			    property_value< std::uint8_t >( movement, movement_properties_.movement_mode );
 			if ( !owner || !mode || !owner->IsA( character_class_ ) ) {
 				return call_original(
-								movement,
-								delta_seconds,
-								friction,
-								fluid,
-								braking_deceleration );
+				    movement,
+				    delta_seconds,
+				    friction,
+				    fluid,
+				    braking_deceleration );
 			}
 
 			auto&      state = states_[ movement ];
 			const bool replaying =
-							bool_value( owner, character_properties_.client_updating );
+			    bool_value( owner, character_properties_.client_updating );
 			if ( replaying && !state.replaying ) {
 				// UE is about to replay FSavedMove_Character records following
 				// a server correction. Our transient crouch edge/timer is not
@@ -462,60 +462,60 @@ namespace {
 			state.replaying = replaying;
 
 			const bool ordinary_mode =
-							*mode == movement_walking || *mode == movement_falling;
+			    *mode == movement_walking || *mode == movement_falling;
 			const bool special =
-							fluid || !ordinary_mode ||
-							!bool_value( owner, character_properties_.can_move, false ) ||
-							bool_value( owner, character_properties_.is_dead ) ||
-							bool_value( owner, character_properties_.is_climbing ) ||
-							bool_value( owner, character_properties_.is_climbing_ladder ) ||
-							bool_value( owner, character_properties_.is_balancing ) ||
-							bool_value( owner, character_properties_.is_falling_balance ) ||
-							bool_value( owner, character_properties_.is_pushing );
+			    fluid || !ordinary_mode ||
+			    !bool_value( owner, character_properties_.can_move, false ) ||
+			    bool_value( owner, character_properties_.is_dead ) ||
+			    bool_value( owner, character_properties_.is_climbing ) ||
+			    bool_value( owner, character_properties_.is_climbing_ladder ) ||
+			    bool_value( owner, character_properties_.is_balancing ) ||
+			    bool_value( owner, character_properties_.is_falling_balance ) ||
+			    bool_value( owner, character_properties_.is_pushing );
 
 			if ( !config_.enabled || special ) {
 				restore_properties( movement, state );
 				state.has_crouch_state = false;
 				return call_original(
-								movement,
-								delta_seconds,
-								friction,
-								fluid,
-								braking_deceleration );
+				    movement,
+				    delta_seconds,
+				    friction,
+				    fluid,
+				    braking_deceleration );
 			}
 
 			auto* velocity =
-							property_value< FVector >( movement, movement_properties_.velocity );
+			    property_value< FVector >( movement, movement_properties_.velocity );
 			auto* acceleration =
-							property_value< FVector >( movement, movement_properties_.acceleration );
+			    property_value< FVector >( movement, movement_properties_.acceleration );
 			auto* max_acceleration =
-							property_value< float >( movement, movement_properties_.max_acceleration );
+			    property_value< float >( movement, movement_properties_.max_acceleration );
 			if ( !velocity || !acceleration || !max_acceleration ) {
 				restore_properties( movement, state );
 				return call_original(
-								movement,
-								delta_seconds,
-								friction,
-								fluid,
-								braking_deceleration );
+				    movement,
+				    delta_seconds,
+				    friction,
+				    fluid,
+				    braking_deceleration );
 			}
 
 			apply_properties( movement, state );
 			if ( !replaying && config_.auto_bhop && jump_held_[ owner ] ) {
 				character_properties_.pressed_jump->SetPropertyValueInContainer(
-								owner,
-								true );
+				    owner,
+				    true );
 			}
 			const auto* jump_key_hold_time = property_value< float >(
-							owner,
-							character_properties_.jump_key_hold_time );
+			    owner,
+			    character_properties_.jump_key_hold_time );
 			// UE clears bPressedJump before CalcVelocity when
 			// JumpMaxHoldTime is zero. JumpKeyHoldTime was captured from the
 			// same compressed client move immediately before that clear, so
 			// it also carries crouched jump requests on authority pawns.
 			const bool jump_queued =
-							bool_value( owner, character_properties_.pressed_jump ) ||
-							( jump_key_hold_time && *jump_key_hold_time > 0.0F );
+			    bool_value( owner, character_properties_.pressed_jump ) ||
+			    ( jump_key_hold_time && *jump_key_hold_time > 0.0F );
 
 			bhop::vec3_t current{
 				velocity->X( ),
@@ -525,19 +525,19 @@ namespace {
 			bool       vertical_velocity_overridden = false;
 			bool       crouched_jump_started        = false;
 			const bool wants_crouch                 = bool_value(
-							movement,
-							movement_properties_.wants_to_crouch );
+			    movement,
+			    movement_properties_.wants_to_crouch );
 			const bool released_quick_crouch =
-							state.has_crouch_state &&
-							state.last_wants_crouch &&
-							!wants_crouch &&
-							state.crouch_hold_seconds <= config_.duck_roll_window;
+			    state.has_crouch_state &&
+			    state.last_wants_crouch &&
+			    !wants_crouch &&
+			    state.crouch_hold_seconds <= config_.duck_roll_window;
 
 			if ( wants_crouch ) {
 				state.crouch_hold_seconds =
-								state.has_crouch_state && state.last_wants_crouch
-												? state.crouch_hold_seconds + delta_seconds
-												: 0.0;
+				    state.has_crouch_state && state.last_wants_crouch
+				    ? state.crouch_hold_seconds + delta_seconds
+				    : 0.0;
 			}
 
 			if ( config_.duck_roll && released_quick_crouch &&
@@ -546,14 +546,14 @@ namespace {
 				auto         original_location = actor->K2_GetActorLocation( );
 				auto         target_location   = original_location;
 				const double lift =
-								bhop::source_to_cm( config_.duck_roll_height );
+				    bhop::source_to_cm( config_.duck_roll_height );
 				target_location.SetZ( target_location.Z( ) + lift );
 				RC::Unreal::FHitResult sweep_result{};
 				actor->K2_SetActorLocation(
-								target_location,
-								true,
-								sweep_result,
-								false );
+				    target_location,
+				    true,
+				    sweep_result,
+				    false );
 				const auto actual_location = actor->K2_GetActorLocation( );
 				if ( actual_location.Z( ) - original_location.Z( ) >=
 				         lift - 0.1 &&
@@ -565,10 +565,10 @@ namespace {
 					vertical_velocity_overridden = true;
 				} else {
 					actor->K2_SetActorLocation(
-									original_location,
-									false,
-									sweep_result,
-									true );
+					    original_location,
+					    false,
+					    sweep_result,
+					    true );
 				}
 			}
 
@@ -577,11 +577,11 @@ namespace {
 			// on our duck-roll timer: that timer is intentionally transient
 			// and can have a different history after a server correction.
 			const bool crouched =
-							bool_value( owner, character_properties_.is_crouched );
+			    bool_value( owner, character_properties_.is_crouched );
 			if ( jump_queued && crouched && *mode == movement_walking &&
 			     set_movement_mode( movement, movement_falling ) ) {
 				current.z =
-								bhop::source_to_cm( config_.move.jump_velocity );
+				    bhop::source_to_cm( config_.move.jump_velocity );
 				vertical_velocity_overridden = true;
 				crouched_jump_started        = true;
 			}
@@ -597,24 +597,24 @@ namespace {
 			}
 
 			const double acceleration_length = std::hypot(
-							acceleration->X( ),
-							acceleration->Y( ) );
+			    acceleration->X( ),
+			    acceleration->Y( ) );
 			// PhysFalling scales Acceleration by Unreal's AirControl before it
 			// invokes CalcVelocity. Preserve that replicated world-space
 			// direction, but reconstruct the full keyboard wish magnitude so
 			// ETB's native air-control scalar is not applied on top of GoldSrc
 			// air acceleration. Ground movement retains analog magnitude.
 			const double input_acceleration =
-							*mode == movement_falling && acceleration_length > 1.0e-6
-											? acceleration_length
-											: *max_acceleration;
+			    *mode == movement_falling && acceleration_length > 1.0e-6
+			    ? acceleration_length
+			    : *max_acceleration;
 			const double crouch_input_scale =
-							crouched ? gold_src_crouch_speed_multiplier : 1.0;
+			    crouched ? gold_src_crouch_speed_multiplier : 1.0;
 			const bhop::movement_input_t input{
 				.acceleration_cm = {
-								acceleration->X( ) * crouch_input_scale,
-								acceleration->Y( ) * crouch_input_scale,
-								acceleration->Z( ),
+				    acceleration->X( ) * crouch_input_scale,
+				    acceleration->Y( ) * crouch_input_scale,
+				    acceleration->Z( ),
 				},
 				.max_input_acceleration_cm = input_acceleration,
 				.delta_seconds             = delta_seconds,
@@ -622,7 +622,7 @@ namespace {
 				.jump_queued               = jump_queued,
 			};
 			const auto result =
-							bhop::calculate_velocity( current, input, config_.move );
+			    bhop::calculate_velocity( current, input, config_.move );
 			velocity->SetX( result.x );
 			velocity->SetY( result.y );
 			if ( vertical_velocity_overridden ) {
@@ -639,18 +639,18 @@ namespace {
 
 	private:
 		auto call_original(
-						UObject* movement,
-						float    delta_seconds,
-						float    friction,
-						bool     fluid,
-						float    braking_deceleration ) const -> void {
+		    UObject* movement,
+		    float    delta_seconds,
+		    float    friction,
+		    bool     fluid,
+		    float    braking_deceleration ) const -> void {
 			if ( g_original_calc_velocity ) {
 				g_original_calc_velocity(
-								movement,
-								delta_seconds,
-								friction,
-								fluid,
-								braking_deceleration );
+				    movement,
+				    delta_seconds,
+				    friction,
+				    fluid,
+				    braking_deceleration );
 			}
 		}
 
@@ -658,8 +658,8 @@ namespace {
 			const bhop::config_result_t loaded = bhop::load_config( config_path_ );
 			if ( !loaded.loaded ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Configuration rejected: {}\n" ),
-								RC::to_wstring( loaded.error ) );
+				    STR( "[bhop] Configuration rejected: {}\n" ),
+				    RC::to_wstring( loaded.error ) );
 				return false;
 			}
 			config_ = loaded.value;
@@ -669,36 +669,36 @@ namespace {
 		auto apply_mouse_settings( ) -> void {
 			if ( !input_settings_ ) {
 				input_settings_ =
-								RC::Unreal::UObjectGlobals::StaticFindObject< UObject* >(
-												nullptr,
-												nullptr,
-												STR( "/Script/Engine.Default__InputSettings" ) );
+				    RC::Unreal::UObjectGlobals::StaticFindObject< UObject* >(
+				        nullptr,
+				        nullptr,
+				        STR( "/Script/Engine.Default__InputSettings" ) );
 			}
 			if ( !mouse_smoothing_property_ && input_settings_ ) {
 				mouse_smoothing_property_ =
-								bool_property( input_settings_, STR( "bEnableMouseSmoothing" ) );
+				    bool_property( input_settings_, STR( "bEnableMouseSmoothing" ) );
 			}
 			if ( !input_settings_ || !mouse_smoothing_property_ ) {
 				RC::Output::send< RC::LogLevel::Warning >(
-								STR( "[bhop] Raw mouse input unavailable: InputSettings could not be validated.\n" ) );
+				    STR( "[bhop] Raw mouse input unavailable: InputSettings could not be validated.\n" ) );
 				return;
 			}
 
 			if ( !has_original_mouse_smoothing_ ) {
 				original_mouse_smoothing_ =
-								mouse_smoothing_property_->GetPropertyValueInContainer( input_settings_ );
+				    mouse_smoothing_property_->GetPropertyValueInContainer( input_settings_ );
 				has_original_mouse_smoothing_ = true;
 			}
 			mouse_smoothing_property_->SetPropertyValueInContainer(
-							input_settings_,
-							config_.raw_mouse_input ? false : original_mouse_smoothing_ );
+			    input_settings_,
+			    config_.raw_mouse_input ? false : original_mouse_smoothing_ );
 
 			if ( !clear_mouse_smoothing_function_ ) {
 				clear_mouse_smoothing_function_ =
-								RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
-												nullptr,
-												nullptr,
-												STR( "/Script/Engine.PlayerInput:ClearSmoothing" ) );
+				    RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
+				        nullptr,
+				        nullptr,
+				        STR( "/Script/Engine.PlayerInput:ClearSmoothing" ) );
 			}
 			if ( clear_mouse_smoothing_function_ ) {
 				std::vector< UObject* > player_inputs;
@@ -713,62 +713,62 @@ namespace {
 			if ( input_settings_ && mouse_smoothing_property_ &&
 			     has_original_mouse_smoothing_ ) {
 				mouse_smoothing_property_->SetPropertyValueInContainer(
-								input_settings_,
-								original_mouse_smoothing_ );
+				    input_settings_,
+				    original_mouse_smoothing_ );
 			}
 		}
 
 		auto cache_properties( UObject* movement, UObject* owner ) -> bool {
 			movement_properties_ = {
 				.character_owner =
-								movement->GetPropertyByNameInChain( STR( "CharacterOwner" ) ),
+				    movement->GetPropertyByNameInChain( STR( "CharacterOwner" ) ),
 				.velocity = movement->GetPropertyByNameInChain( STR( "Velocity" ) ),
 				.acceleration =
-								movement->GetPropertyByNameInChain( STR( "Acceleration" ) ),
+				    movement->GetPropertyByNameInChain( STR( "Acceleration" ) ),
 				.max_acceleration =
-								movement->GetPropertyByNameInChain( STR( "MaxAcceleration" ) ),
+				    movement->GetPropertyByNameInChain( STR( "MaxAcceleration" ) ),
 				.movement_mode =
-								movement->GetPropertyByNameInChain( STR( "MovementMode" ) ),
+				    movement->GetPropertyByNameInChain( STR( "MovementMode" ) ),
 				.gravity_scale =
-								movement->GetPropertyByNameInChain( STR( "GravityScale" ) ),
+				    movement->GetPropertyByNameInChain( STR( "GravityScale" ) ),
 				.jump_z_velocity =
-								movement->GetPropertyByNameInChain( STR( "JumpZVelocity" ) ),
+				    movement->GetPropertyByNameInChain( STR( "JumpZVelocity" ) ),
 				.max_walk_speed =
-								movement->GetPropertyByNameInChain( STR( "MaxWalkSpeed" ) ),
+				    movement->GetPropertyByNameInChain( STR( "MaxWalkSpeed" ) ),
 				.max_walk_speed_crouched =
-								movement->GetPropertyByNameInChain(
-												STR( "MaxWalkSpeedCrouched" ) ),
+				    movement->GetPropertyByNameInChain(
+				        STR( "MaxWalkSpeedCrouched" ) ),
 				.max_sprint_speed =
-								movement->GetPropertyByNameInChain( STR( "MaxSprintSpeed" ) ),
+				    movement->GetPropertyByNameInChain( STR( "MaxSprintSpeed" ) ),
 				.wants_to_crouch =
-								bool_property( movement, STR( "bWantsToCrouch" ) ),
+				    bool_property( movement, STR( "bWantsToCrouch" ) ),
 			};
 			character_properties_ = {
 				.pressed_jump = bool_property( owner, STR( "bPressedJump" ) ),
 				.jump_key_hold_time =
-								owner->GetPropertyByNameInChain( STR( "JumpKeyHoldTime" ) ),
+				    owner->GetPropertyByNameInChain( STR( "JumpKeyHoldTime" ) ),
 				.client_updating = bool_property( owner, STR( "bClientUpdating" ) ),
 				.was_jumping     = bool_property( owner, STR( "bWasJumping" ) ),
 				.can_move        = bool_property( owner, STR( "CanMove" ) ),
 				.is_dead         = bool_property( owner, STR( "IsDead" ) ),
 				.is_climbing     = bool_property( owner, STR( "IsClimbing" ) ),
 				.is_climbing_ladder =
-								bool_property( owner, STR( "IsClimbingLadder" ) ),
+				    bool_property( owner, STR( "IsClimbingLadder" ) ),
 				.is_balancing = bool_property( owner, STR( "IsBalancing" ) ),
 				.is_falling_balance =
-								bool_property( owner, STR( "IsFallingBalance" ) ),
+				    bool_property( owner, STR( "IsFallingBalance" ) ),
 				.is_pushing  = bool_property( owner, STR( "IsPushing" ) ),
 				.is_crouched = bool_property( owner, STR( "bIsCrouched" ) ),
 				.wants_to_crouch_after_landing =
-								bool_property( owner, STR( "WantsToCrouchAfterLanding" ) ),
+				    bool_property( owner, STR( "WantsToCrouchAfterLanding" ) ),
 			};
 			return movement_properties_.complete( ) &&
-			       character_properties_.complete( );
+			    character_properties_.complete( );
 		}
 
 		auto set_movement_mode(
-						UObject*     movement,
-						std::uint8_t mode ) const -> bool {
+		    UObject*     movement,
+		    std::uint8_t mode ) const -> bool {
 			if ( !movement || !set_movement_mode_function_ ||
 			     !set_movement_mode_property_ ) {
 				return false;
@@ -776,50 +776,50 @@ namespace {
 
 			std::array< std::uint8_t, 16 > parameters{};
 			*set_movement_mode_property_
-								->ContainerPtrToValuePtr< std::uint8_t >( parameters.data( ) ) =
-							mode;
+			     ->ContainerPtrToValuePtr< std::uint8_t >( parameters.data( ) ) =
+			    mode;
 			movement->ProcessEvent(
-							set_movement_mode_function_,
-							parameters.data( ) );
+			    set_movement_mode_function_,
+			    parameters.data( ) );
 			return true;
 		}
 
 		auto on_engine_tick( ) -> void {
 			std::vector< UObject* > characters;
 			RC::Unreal::UObjectGlobals::FindAllOf(
-							STR( "BPCharacter_Demo_C" ),
-							characters );
+			    STR( "BPCharacter_Demo_C" ),
+			    characters );
 			for ( UObject* character : characters ) {
 				if ( config_.enabled && config_.auto_bhop &&
 				     jump_held_[ character ] && character_properties_.pressed_jump ) {
 					character_properties_.pressed_jump
-									->SetPropertyValueInContainer( character, true );
+					    ->SetPropertyValueInContainer( character, true );
 				}
 
 				const auto crouch = crouch_held_.find( character );
 				if ( hook_ready_ && config_.enabled &&
 				     crouch != crouch_held_.end( ) ) {
 					auto** movement_storage =
-									character->GetValuePtrByPropertyNameInChain< UObject* >(
-													STR( "CharacterMovement" ) );
+					    character->GetValuePtrByPropertyNameInChain< UObject* >(
+					        STR( "CharacterMovement" ) );
 					UObject* movement =
-									movement_storage ? *movement_storage : nullptr;
+					    movement_storage ? *movement_storage : nullptr;
 					auto* mode = property_value< std::uint8_t >(
-									movement,
-									movement_properties_.movement_mode );
+					    movement,
+					    movement_properties_.movement_mode );
 					if ( movement && mode &&
 					     ( *mode == movement_walking ||
 					       *mode == movement_falling ) &&
 					     bool_value(
-														character,
-														character_properties_.can_move,
-														false ) ) {
+					         character,
+					         character_properties_.can_move,
+					         false ) ) {
 						movement_properties_.wants_to_crouch
-										->SetPropertyValueInContainer(
-														movement,
-														crouch->second );
+						    ->SetPropertyValueInContainer(
+						        movement,
+						        crouch->second );
 						character_properties_.wants_to_crouch_after_landing
-										->SetPropertyValueInContainer( character, false );
+						    ->SetPropertyValueInContainer( character, false );
 					}
 				}
 			}
@@ -833,55 +833,55 @@ namespace {
 
 		auto install_hook( UObject* character ) -> void {
 			character_class_ =
-							RC::Unreal::UObjectGlobals::StaticFindObject< UClass* >(
-											nullptr,
-											nullptr,
-											STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C" ) );
+			    RC::Unreal::UObjectGlobals::StaticFindObject< UClass* >(
+			        nullptr,
+			        nullptr,
+			        STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C" ) );
 			auto** movement_storage =
-							character->GetValuePtrByPropertyNameInChain< UObject* >(
-											STR( "CharacterMovement" ) );
+			    character->GetValuePtrByPropertyNameInChain< UObject* >(
+			        STR( "CharacterMovement" ) );
 			UObject* movement =
-							movement_storage ? *movement_storage : nullptr;
+			    movement_storage ? *movement_storage : nullptr;
 			if ( !character_class_ || !movement ||
 			     !cache_properties( movement, character ) ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Native hook disabled: ETB movement properties " )
-												STR( "did not match the supported build.\n" ) );
+				    STR( "[bhop] Native hook disabled: ETB movement properties " )
+				        STR( "did not match the supported build.\n" ) );
 				return;
 			}
 
 			set_movement_mode_function_ =
-							RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
-											nullptr,
-											nullptr,
-											STR( "/Script/Engine.CharacterMovementComponent:" )
-															STR( "SetMovementMode" ) );
+			    RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
+			        nullptr,
+			        nullptr,
+			        STR( "/Script/Engine.CharacterMovementComponent:" )
+			            STR( "SetMovementMode" ) );
 			if ( set_movement_mode_function_ ) {
 				set_movement_mode_property_ =
-								set_movement_mode_function_->FindProperty(
-												RC::Unreal::FName(
-																STR( "NewMovementMode" ),
-																RC::Unreal::FNAME_Find ) );
+				    set_movement_mode_function_->FindProperty(
+				        RC::Unreal::FName(
+				            STR( "NewMovementMode" ),
+				            RC::Unreal::FNAME_Find ) );
 			}
 			if ( !set_movement_mode_property_ ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Native hook disabled: SetMovementMode could " )
-												STR( "not be validated.\n" ) );
+				    STR( "[bhop] Native hook disabled: SetMovementMode could " )
+				        STR( "not be validated.\n" ) );
 				return;
 			}
 			register_crouch_hooks( );
 			register_mouse_hooks( );
 
 			UFunction* wrapper =
-							RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
-											nullptr,
-											nullptr,
-											STR( "/Script/Engine.CharacterMovementComponent:CalcVelocity" ) );
+			    RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
+			        nullptr,
+			        nullptr,
+			        STR( "/Script/Engine.CharacterMovementComponent:CalcVelocity" ) );
 			const auto slot = resolve_calc_velocity_slot( wrapper );
 			if ( !slot ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Native hook disabled: CalcVelocity virtual slot " )
-												STR( "could not be validated.\n" ) );
+				    STR( "[bhop] Native hook disabled: CalcVelocity virtual slot " )
+				        STR( "could not be validated.\n" ) );
 				return;
 			}
 
@@ -892,51 +892,51 @@ namespace {
 			void* target = ( *object_as_vtable )[ *slot ];
 			if ( !is_executable_game_address( target ) ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Native hook disabled: CalcVelocity slot {} " )
-												STR( "did not point into executable game code.\n" ),
-								*slot );
+				    STR( "[bhop] Native hook disabled: CalcVelocity slot {} " )
+				        STR( "did not point into executable game code.\n" ),
+				    *slot );
 				return;
 			}
 
 			if ( MH_Initialize( ) != MH_OK ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Native hook disabled: MinHook initialization " )
-												STR( "failed.\n" ) );
+				    STR( "[bhop] Native hook disabled: MinHook initialization " )
+				        STR( "failed.\n" ) );
 				return;
 			}
 			minhook_initialized_ = true;
 			if ( MH_CreateHook(
-												target,
-												reinterpret_cast< void* >( &calc_velocity_detour ),
-												reinterpret_cast< void** >( &g_original_calc_velocity ) ) != MH_OK ||
+			         target,
+			         reinterpret_cast< void* >( &calc_velocity_detour ),
+			         reinterpret_cast< void** >( &g_original_calc_velocity ) ) != MH_OK ||
 			     MH_EnableHook( target ) != MH_OK ) {
 				RC::Output::send< RC::LogLevel::Error >(
-								STR( "[bhop] Native hook disabled: CalcVelocity detour could " )
-												STR( "not be installed.\n" ) );
+				    STR( "[bhop] Native hook disabled: CalcVelocity detour could " )
+				        STR( "not be installed.\n" ) );
 				return;
 			}
 
 			hook_target_ = target;
 			hook_ready_  = true;
 			RC::Output::send< RC::LogLevel::Normal >(
-							STR( "[bhop] Native CalcVelocity hook active (slot {}, target {}).\n" ),
-							*slot,
-							target );
+			    STR( "[bhop] Native CalcVelocity hook active (slot {}, target {}).\n" ),
+			    *slot,
+			    target );
 		}
 
 		auto apply_properties( UObject* movement, movement_state_t& state ) -> void {
 			auto* gravity =
-							property_value< float >( movement, movement_properties_.gravity_scale );
+			    property_value< float >( movement, movement_properties_.gravity_scale );
 			auto* jump =
-							property_value< float >( movement, movement_properties_.jump_z_velocity );
+			    property_value< float >( movement, movement_properties_.jump_z_velocity );
 			auto* walk =
-							property_value< float >( movement, movement_properties_.max_walk_speed );
+			    property_value< float >( movement, movement_properties_.max_walk_speed );
 			auto* crouch = property_value< float >(
-							movement,
-							movement_properties_.max_walk_speed_crouched );
+			    movement,
+			    movement_properties_.max_walk_speed_crouched );
 			auto* sprint = property_value< float >(
-							movement,
-							movement_properties_.max_sprint_speed );
+			    movement,
+			    movement_properties_.max_sprint_speed );
 			if ( !gravity || !jump || !walk || !crouch || !sprint ) {
 				return;
 			}
@@ -950,14 +950,14 @@ namespace {
 			}
 
 			*gravity = static_cast< float >(
-							bhop::source_to_cm( config_.move.gravity ) / 980.0 );
+			    bhop::source_to_cm( config_.move.gravity ) / 980.0 );
 			*jump = static_cast< float >(
-							bhop::source_to_cm( config_.move.jump_velocity ) );
+			    bhop::source_to_cm( config_.move.jump_velocity ) );
 			const auto fixed_speed =
-							static_cast< float >( bhop::source_to_cm( config_.move.move_speed ) );
+			    static_cast< float >( bhop::source_to_cm( config_.move.move_speed ) );
 			*walk   = fixed_speed;
 			*crouch = static_cast< float >(
-							fixed_speed * gold_src_crouch_speed_multiplier );
+			    fixed_speed * gold_src_crouch_speed_multiplier );
 			*sprint = fixed_speed;
 		}
 
@@ -966,28 +966,28 @@ namespace {
 				return;
 			}
 			if ( auto* value = property_value< float >(
-												movement,
-												movement_properties_.gravity_scale ) ) {
+			         movement,
+			         movement_properties_.gravity_scale ) ) {
 				*value = state.gravity_scale;
 			}
 			if ( auto* value = property_value< float >(
-												movement,
-												movement_properties_.jump_z_velocity ) ) {
+			         movement,
+			         movement_properties_.jump_z_velocity ) ) {
 				*value = state.jump_z_velocity;
 			}
 			if ( auto* value = property_value< float >(
-												movement,
-												movement_properties_.max_walk_speed ) ) {
+			         movement,
+			         movement_properties_.max_walk_speed ) ) {
 				*value = state.max_walk_speed;
 			}
 			if ( auto* value = property_value< float >(
-												movement,
-												movement_properties_.max_walk_speed_crouched ) ) {
+			         movement,
+			         movement_properties_.max_walk_speed_crouched ) ) {
 				*value = state.max_walk_speed_crouched;
 			}
 			if ( auto* value = property_value< float >(
-												movement,
-												movement_properties_.max_sprint_speed ) ) {
+			         movement,
+			         movement_properties_.max_sprint_speed ) ) {
 				*value = state.max_sprint_speed;
 			}
 			state.overriding = false;
@@ -995,194 +995,122 @@ namespace {
 
 		auto register_jump_hooks( ) -> void {
 			const auto press = [ this ](
-																										RC::Unreal::UnrealScriptFunctionCallableContext&
-																														context,
-																										void* ) {
+			                       RC::Unreal::UnrealScriptFunctionCallableContext&
+			                           context,
+			                       void* ) {
 				if ( character_class_ && context.Context->IsA( character_class_ ) ) {
 					jump_held_[ context.Context ] = true;
 				}
 			};
 			const auto release = [ this ](
-																												RC::Unreal::UnrealScriptFunctionCallableContext&
-																																context,
-																												void* ) {
+			                         RC::Unreal::UnrealScriptFunctionCallableContext&
+			                             context,
+			                         void* ) {
 				if ( character_class_ && context.Context->IsA( character_class_ ) ) {
 					jump_held_[ context.Context ] = false;
 				}
 			};
 			jump_hook_ids_.push_back(
-							RC::Unreal::UObjectGlobals::RegisterHook(
-											STR( "/Script/Engine.Character:Jump" ),
-											press,
-											{},
-											nullptr ) );
+			    RC::Unreal::UObjectGlobals::RegisterHook(
+			        STR( "/Script/Engine.Character:Jump" ),
+			        press,
+			        {},
+			        nullptr ) );
 			jump_hook_ids_.push_back(
-							RC::Unreal::UObjectGlobals::RegisterHook(
-											STR( "/Script/Engine.Character:StopJumping" ),
-											release,
-											{},
-											nullptr ) );
+			    RC::Unreal::UObjectGlobals::RegisterHook(
+			        STR( "/Script/Engine.Character:StopJumping" ),
+			        release,
+			        {},
+			        nullptr ) );
 		}
 
 		auto register_crouch_hooks( ) -> void {
-			const auto register_event =
-							[ this ](
-											const RC::StringType& path,
-											int                   event_id ) {
-								const auto callback =
-												[ this, event_id ](
-																RC::Unreal::
-																				UnrealScriptFunctionCallableContext& context,
-																void* ) {
-													if ( !character_class_ ||
-					             !context.Context->IsA( character_class_ ) ) {
-														return;
-													}
-													if ( !crouch_press_event_ ) {
-														crouch_press_event_ = event_id;
-													}
-													if ( event_id == *crouch_press_event_ ) {
-														crouch_held_[ context.Context ] = true;
-														crouch_release_pending_[ context.Context ] =
-																		false;
-													} else {
-														// Keep +duck alive through at least one
-						        // predicted move so very short taps and mouse
-						        // wheel binds are represented in compressed
-						        // client moves before releasing it.
-														crouch_release_pending_[ context.Context ] =
-																		true;
-													}
-												};
-								const auto no_op =
-												[](
-																RC::Unreal::
-																				UnrealScriptFunctionCallableContext&,
-																void* ) {};
-								crouch_hook_ids_.push_back(
-												RC::Unreal::UObjectGlobals::RegisterHook(
-																path,
-																callback,
-																no_op,
-																nullptr ) );
-							};
+			register_crouch_event( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpActEvt_Crouch_K2Node_InputActionEvent_1" ), 1 );
+			register_crouch_event( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpActEvt_Crouch_K2Node_InputActionEvent_0" ), 0 );
+		}
 
-			register_event(
-							STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-											STR( "InpActEvt_Crouch_K2Node_InputActionEvent_1" ),
-							1 );
-			register_event(
-							STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-											STR( "InpActEvt_Crouch_K2Node_InputActionEvent_0" ),
-							0 );
+		auto register_crouch_event( const RC::StringType& path, int event_id ) -> void {
+			const auto callback = [ this, event_id ]( RC::Unreal::UnrealScriptFunctionCallableContext& context, void* ) {
+				if ( !character_class_ || !context.Context->IsA( character_class_ ) ) {
+					return;
+				}
+				if ( !crouch_press_event_ ) {
+					crouch_press_event_ = event_id;
+				}
+				if ( event_id == *crouch_press_event_ ) {
+					crouch_held_[ context.Context ]            = true;
+					crouch_release_pending_[ context.Context ] = false;
+				} else {
+					// Preserve +duck for one predicted move so short taps are
+					// represented in compressed client moves.
+					crouch_release_pending_[ context.Context ] = true;
+				}
+			};
+			const auto no_op = []( RC::Unreal::UnrealScriptFunctionCallableContext&, void* ) {};
+			crouch_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( path, callback, no_op, nullptr ) );
 		}
 
 		auto register_mouse_hooks( ) -> void {
-			const auto callback =
-							[ this ](
-											RC::Unreal::UnrealScriptFunctionCallableContext& context,
-											void* ) {
-								if ( !config_.raw_mouse_input ) {
-									return;
-								}
+			const auto callback = [ this ]( RC::Unreal::UnrealScriptFunctionCallableContext& context, void* ) { correct_mouse_input( context ); };
+			const auto no_op    = []( RC::Unreal::UnrealScriptFunctionCallableContext&, void* ) {};
+			mouse_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_Turn_K2Node_InputAxisEvent_157" ), callback, no_op, nullptr ) );
+			mouse_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ), callback, no_op, nullptr ) );
+		}
 
-								if ( !mouse_delta_seconds_property_ ) {
-									mouse_delta_seconds_property_ =
-													context.Context->GetPropertyByNameInChain(
-																	STR( "Delta Seconds" ) );
-								}
-								const auto* blueprint_delta = property_value< float >(
-												context.Context,
-												mouse_delta_seconds_property_ );
-								const double delta_seconds =
-												blueprint_delta && *blueprint_delta > 1.0e-6F
-																? *blueprint_delta
-																: frame_delta_seconds_;
-								if ( delta_seconds <= 1.0e-6 ) {
-									return;
-								}
+		auto correct_mouse_input( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void {
+			if ( !config_.raw_mouse_input ) {
+				return;
+			}
+			if ( !mouse_delta_seconds_property_ ) {
+				mouse_delta_seconds_property_ = context.Context->GetPropertyByNameInChain( STR( "Delta Seconds" ) );
+			}
 
-								auto&        parameters = context.GetParams< axis_input_params_t >( );
-								const double scale      = std::clamp(
-												1.0 / ( mouse_reference_fps * delta_seconds ),
-												0.05,
-												20.0 );
-								parameters.axis_value *= static_cast< float >( scale );
-							};
-			const auto no_op =
-							[](
-											RC::Unreal::UnrealScriptFunctionCallableContext&,
-											void* ) {};
+			const auto*  blueprint_delta = property_value< float >( context.Context, mouse_delta_seconds_property_ );
+			const double delta_seconds   = blueprint_delta && *blueprint_delta > 1.0e-6F ? *blueprint_delta : frame_delta_seconds_;
+			if ( delta_seconds <= 1.0e-6 ) {
+				return;
+			}
 
-			mouse_hook_ids_.push_back(
-							RC::Unreal::UObjectGlobals::RegisterHook(
-											STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-															STR( "InpAxisEvt_Turn_K2Node_InputAxisEvent_157" ),
-											callback,
-											no_op,
-											nullptr ) );
-			mouse_hook_ids_.push_back(
-							RC::Unreal::UObjectGlobals::RegisterHook(
-											STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:" )
-															STR( "InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ),
-											callback,
-											no_op,
-											nullptr ) );
+			auto&        parameters = context.GetParams< axis_input_params_t >( );
+			const double scale      = std::clamp( 1.0 / ( mouse_reference_fps * delta_seconds ), 0.05, 20.0 );
+			parameters.axis_value *= static_cast< float >( scale );
 		}
 
 		auto register_commands( ) -> void {
 			RC::Unreal::Hook::FCallbackOptions options{};
 			options.OwnerModName = STR( "bhop" );
 			options.HookName     = STR( "ConsoleCommands" );
-			console_hook_id_ =
-							RC::Unreal::Hook::RegisterProcessConsoleExecCallback(
-											[ this ](
-															auto& information,
-															UObject*,
-															const RC::Unreal::TCHAR*   raw_command,
-															RC::Unreal::FOutputDevice& output,
-															UObject* ) {
-												const auto command = first_token_lower( raw_command );
-												if ( command == STR( "bhop.toggle" ) ) {
-													config_.enabled = !config_.enabled;
-												} else if ( command == STR( "bhop.autobhop" ) ) {
-													config_.auto_bhop = !config_.auto_bhop;
-												} else if ( command == STR( "bhop.speedcap" ) ) {
-													config_.bunnyhop_speed_cap =
-																	!config_.bunnyhop_speed_cap;
-												} else if ( command == STR( "bhop.duckroll" ) ) {
-													config_.duck_roll = !config_.duck_roll;
-												} else if ( command == STR( "bhop.rawmouse" ) ) {
-													config_.raw_mouse_input = !config_.raw_mouse_input;
-													apply_mouse_settings( );
-												} else if ( command == STR( "bhop.reload" ) ) {
-													if ( !reload_config( ) ) {
-														output.Log(
-																		STR( "[bhop] configuration reload failed" ) );
-														information.TrySetReturnValue( true );
-														return;
-													}
-													apply_mouse_settings( );
-												} else if ( command != STR( "bhop.status" ) ) {
-													return;
-												}
 
-												const auto status = std::format(
-																STR( "[bhop] enabled={} autobhop={} speedcap={} " )
-																				STR( "duckroll={} rawmouse={} checksum={} " )
-																								STR( "native={}\n" ),
-																config_.enabled,
-																config_.auto_bhop,
-																config_.bunnyhop_speed_cap,
-																config_.duck_roll,
-																config_.raw_mouse_input,
-																RC::to_wstring( bhop::checksum_hex(
-																				bhop::config_checksum( config_ ) ) ),
-																hook_ready_ );
-												output.Log( status.c_str( ) );
-												information.TrySetReturnValue( true );
-											},
-											std::move( options ) );
+			const auto callback = [ this ]( auto& information, UObject*, const RC::Unreal::TCHAR* raw_command, RC::Unreal::FOutputDevice& output, UObject* ) {
+				const auto command = first_token_lower( raw_command );
+				if ( command == STR( "bhop.toggle" ) ) {
+					config_.enabled = !config_.enabled;
+				} else if ( command == STR( "bhop.autobhop" ) ) {
+					config_.auto_bhop = !config_.auto_bhop;
+				} else if ( command == STR( "bhop.speedcap" ) ) {
+					config_.bunnyhop_speed_cap = !config_.bunnyhop_speed_cap;
+				} else if ( command == STR( "bhop.duckroll" ) ) {
+					config_.duck_roll = !config_.duck_roll;
+				} else if ( command == STR( "bhop.rawmouse" ) ) {
+					config_.raw_mouse_input = !config_.raw_mouse_input;
+					apply_mouse_settings( );
+				} else if ( command == STR( "bhop.reload" ) ) {
+					if ( !reload_config( ) ) {
+						output.Log( STR( "[bhop] configuration reload failed" ) );
+						information.TrySetReturnValue( true );
+						return;
+					}
+					apply_mouse_settings( );
+				} else if ( command != STR( "bhop.status" ) ) {
+					return;
+				}
+
+				const auto checksum = RC::to_wstring( bhop::checksum_hex( bhop::config_checksum( config_ ) ) );
+				const auto status   = std::format( STR( "[bhop] enabled={} autobhop={} speedcap={} duckroll={} rawmouse={} checksum={} native={}\n" ), config_.enabled, config_.auto_bhop, config_.bunnyhop_speed_cap, config_.duck_roll, config_.raw_mouse_input, checksum, hook_ready_ );
+				output.Log( status.c_str( ) );
+				information.TrySetReturnValue( true );
+			};
+			console_hook_id_ = RC::Unreal::Hook::RegisterProcessConsoleExecCallback( callback, std::move( options ) );
 		}
 
 	private:
@@ -1217,25 +1145,25 @@ namespace {
 	};
 
 	void calc_velocity_detour(
-					UObject* movement,
-					float    delta_seconds,
-					float    friction,
-					bool     fluid,
-					float    braking_deceleration ) {
+	    UObject* movement,
+	    float    delta_seconds,
+	    float    friction,
+	    bool     fluid,
+	    float    braking_deceleration ) {
 		if ( g_mod ) {
 			g_mod->handle_calc_velocity(
-							movement,
-							delta_seconds,
-							friction,
-							fluid,
-							braking_deceleration );
+			    movement,
+			    delta_seconds,
+			    friction,
+			    fluid,
+			    braking_deceleration );
 		} else if ( g_original_calc_velocity ) {
 			g_original_calc_velocity(
-							movement,
-							delta_seconds,
-							friction,
-							fluid,
-							braking_deceleration );
+			    movement,
+			    delta_seconds,
+			    friction,
+			    fluid,
+			    braking_deceleration );
 		}
 	}
 }  // namespace

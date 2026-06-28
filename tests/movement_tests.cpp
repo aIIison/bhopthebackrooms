@@ -26,15 +26,15 @@ int main( ) {
 	using namespace bhop;
 
 	check(
-					near(
-									source_to_cm( 320.0 ),
-									320.0 * centimeters_per_source_unit ),
-					"Source-to-Unreal conversion" );
+	    near(
+	        source_to_cm( 320.0 ),
+	        320.0 * centimeters_per_source_unit ),
+	    "Source-to-Unreal conversion" );
 	check(
-					near(
-									cm_to_source( 320.0 * centimeters_per_source_unit ),
-									320.0 ),
-					"Unreal-to-Source conversion" );
+	    near(
+	        cm_to_source( 320.0 * centimeters_per_source_unit ),
+	        320.0 ),
+	    "Unreal-to-Source conversion" );
 
 	move_vars_t            vars{};
 	const movement_input_t full_forward{
@@ -57,8 +57,8 @@ int main( ) {
 	};
 	const vec3_t diagonal_velocity = calculate_velocity( {}, diagonal, vars );
 	check(
-					near( cm_to_source( diagonal_velocity.horizontal_length( ) ), 12.5 ),
-					"Diagonal input normalization" );
+	    near( cm_to_source( diagonal_velocity.horizontal_length( ) ), 12.5 ),
+	    "Diagonal input normalization" );
 
 	const movement_input_t air{
 		.acceleration_cm           = { 0.0, 2048.0, 0.0 },
@@ -68,10 +68,10 @@ int main( ) {
 		.jump_queued               = false,
 	};
 	const vec3_t air_velocity =
-					calculate_velocity( { source_to_cm( 250.0 ), 0.0, 0.0 }, air, vars );
+	    calculate_velocity( { source_to_cm( 250.0 ), 0.0, 0.0 }, air, vars );
 	check(
-					near( cm_to_source( air_velocity.y ), 25.0 ),
-					"GoldSrc air acceleration uses uncapped wishspeed" );
+	    near( cm_to_source( air_velocity.y ), 25.0 ),
+	    "GoldSrc air acceleration uses uncapped wishspeed" );
 
 	const movement_input_t friction_only{
 		.acceleration_cm           = {},
@@ -81,7 +81,7 @@ int main( ) {
 		.jump_queued               = false,
 	};
 	const vec3_t friction_velocity =
-					calculate_velocity( { source_to_cm( 250.0 ), 0.0, 0.0 }, friction_only, vars );
+	    calculate_velocity( { source_to_cm( 250.0 ), 0.0, 0.0 }, friction_only, vars );
 	check( near( cm_to_source( friction_velocity.x ), 240.0 ), "Ground friction" );
 
 	const movement_input_t reverse_ground{
@@ -92,27 +92,27 @@ int main( ) {
 		.jump_queued               = false,
 	};
 	const vec3_t reversed = calculate_velocity(
-					{ source_to_cm( 250.0 ), 0.0, 0.0 },
-					reverse_ground,
-					vars );
+	    { source_to_cm( 250.0 ), 0.0, 0.0 },
+	    reverse_ground,
+	    vars );
 	check(
-					near( cm_to_source( reversed.x ), 227.5 ),
-					"Ground reversal applies friction before acceleration" );
+	    near( cm_to_source( reversed.x ), 227.5 ),
+	    "Ground reversal applies friction before acceleration" );
 
 	const vec3_t uncapped{ source_to_cm( 700.0 ), 0.0, 123.0 };
 	const vec3_t capped = apply_mega_bunny_cap( uncapped, vars );
 	check(
-					near( cm_to_source( capped.horizontal_length( ) ), 1.7 * 320.0 * 0.65 ),
-					"Mega-bunny speed cap" );
+	    near( cm_to_source( capped.horizontal_length( ) ), 1.7 * 320.0 * 0.65 ),
+	    "Mega-bunny speed cap" );
 	check( near( capped.z, uncapped.z ), "Mega-bunny cap preserves vertical velocity" );
 
 	const auto temp = std::filesystem::temp_directory_path( ) / "etb_bhop_test.ini";
 	{
 		std::ofstream ini{ temp };
 		ini << "[General]\nEnabled=true\nAutoBhop=false\n"
-									"BunnyhopSpeedCap=true\nDuckRoll=true\nRawMouseInput=false\n"
-									"[MoveVars]\nGravity=800\nAirAccelerate=12\n"
-									"[DuckRoll]\nWindow=0.35\nHeight=18\n";
+		       "BunnyhopSpeedCap=true\nDuckRoll=true\nRawMouseInput=false\n"
+		       "[MoveVars]\nGravity=800\nAirAccelerate=12\n"
+		       "[DuckRoll]\nWindow=0.35\nHeight=18\n";
 	}
 	const config_result_t loaded = load_config( temp );
 	std::filesystem::remove( temp );
