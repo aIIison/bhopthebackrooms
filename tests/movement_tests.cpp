@@ -1,5 +1,6 @@
-#include <bhop/config.h>
-#include <bhop/movement.h>
+#include "config.h"
+#include "movement.h"
+
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -8,7 +9,7 @@
 #include <string>
 
 namespace {
-	int failures{ };
+	int failures{};
 
 	auto check( bool condition, const std::string& name ) -> void {
 		if ( !condition ) {
@@ -36,7 +37,7 @@ int main( ) {
 	        320.0 ),
 	    "Unreal-to-Source conversion" );
 
-	move_vars_t            vars{ };
+	move_vars_t            vars{};
 	const movement_input_t full_forward{
 		.acceleration_cm           = { 2048.0, 0.0, 0.0 },
 		.max_input_acceleration_cm = 2048.0,
@@ -44,7 +45,7 @@ int main( ) {
 		.grounded                  = true,
 		.jump_queued               = true,
 	};
-	const vec3_t first_ground = calculate_velocity( { }, full_forward, vars );
+	const vec3_t first_ground = calculate_velocity( {}, full_forward, vars );
 	check( near( cm_to_source( first_ground.x ), 12.5 ), "GoldSrc ground acceleration" );
 	check( near( first_ground.y, 0.0 ), "Ground acceleration direction" );
 
@@ -55,7 +56,7 @@ int main( ) {
 		.grounded                  = true,
 		.jump_queued               = true,
 	};
-	const vec3_t diagonal_velocity = calculate_velocity( { }, diagonal, vars );
+	const vec3_t diagonal_velocity = calculate_velocity( {}, diagonal, vars );
 	check(
 	    near( cm_to_source( diagonal_velocity.horizontal_length( ) ), 12.5 ),
 	    "Diagonal input normalization" );
@@ -74,7 +75,7 @@ int main( ) {
 	    "GoldSrc air acceleration uses uncapped wishspeed" );
 
 	const movement_input_t friction_only{
-		.acceleration_cm           = { },
+		.acceleration_cm           = {},
 		.max_input_acceleration_cm = 2048.0,
 		.delta_seconds             = 0.01,
 		.grounded                  = true,
@@ -144,7 +145,7 @@ int main( ) {
 		.view_right    = { 0.0, 1.0, 0.0 },
 		.delta_seconds = 0.1,
 	};
-	const auto sinking = calculate_water_velocity( { }, idle_water, vars );
+	const auto sinking = calculate_water_velocity( {}, idle_water, vars );
 	check( near( cm_to_source( sinking.z ), -24.0 ), "GoldSrc idle water sinking" );
 
 	const auto friction_only_water = calculate_water_velocity( { source_to_cm( 100.0 ), 0.0, 0.0 }, idle_water, vars );
@@ -153,17 +154,17 @@ int main( ) {
 
 	auto forward_water         = idle_water;
 	forward_water.forward_move = 1.0;
-	const auto water_accel     = calculate_water_velocity( { }, forward_water, vars );
+	const auto water_accel     = calculate_water_velocity( {}, forward_water, vars );
 	check( near( cm_to_source( water_accel.x ), 100.0 ), "GoldSrc water acceleration" );
 
-	auto swim_up       = idle_water;
-	swim_up.swim_up    = true;
-	const auto swimming_up = calculate_water_velocity( { }, swim_up, vars );
+	auto swim_up           = idle_water;
+	swim_up.swim_up        = true;
+	const auto swimming_up = calculate_water_velocity( {}, swim_up, vars );
 	check( near( cm_to_source( swimming_up.z ), 60.0 ), "GoldSrc water jump impulse precedes friction" );
 
-	auto swim_down      = idle_water;
-	swim_down.up_move   = -1.0;
-	const auto swimming_down = calculate_water_velocity( { }, swim_down, vars );
+	auto swim_down           = idle_water;
+	swim_down.up_move        = -1.0;
+	const auto swimming_down = calculate_water_velocity( {}, swim_down, vars );
 	check( near( cm_to_source( swimming_down.z ), -100.0 ), "Water down input" );
 
 	auto shark_input          = swim_up;

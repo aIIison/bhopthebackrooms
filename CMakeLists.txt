@@ -11,10 +11,10 @@ option(BHOP_BUILD_UE4SS_MOD "Build the native UE4SS adapter" OFF)
 set(UE4SS_ROOT "" CACHE PATH "Path to the ETBCommunity/UE4SS 1.3.0 source tree")
 
 add_library(bhop_core STATIC
-    src/bhop_config.cpp
-    src/bhop_movement.cpp
+    src/config.cpp
+    src/movement.cpp
 )
-target_include_directories(bhop_core PUBLIC include)
+target_include_directories(bhop_core PUBLIC src)
 target_compile_features(bhop_core PUBLIC cxx_std_23)
 
 if(MSVC)
@@ -61,8 +61,18 @@ if(BHOP_BUILD_UE4SS_MOD)
 
     add_subdirectory("${UE4SS_ROOT}" "${CMAKE_BINARY_DIR}/ue4ss")
 
-    add_library(etb_bhop SHARED native/bhop_mod.cpp)
-    target_include_directories(etb_bhop PRIVATE include)
+    add_library(etb_bhop SHARED
+        src/hooks.cpp
+        src/hooks.h
+        src/input.cpp
+        src/ladder.cpp
+        src/mod.cpp
+        src/mod.h
+        src/player.cpp
+        src/runtime.cpp
+        src/water.cpp
+    )
+    target_include_directories(etb_bhop PRIVATE src)
     target_link_libraries(etb_bhop PRIVATE bhop_core UE4SS minhook Zydis)
     set_target_properties(etb_bhop PROPERTIES OUTPUT_NAME main)
     add_custom_command(

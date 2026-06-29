@@ -1,90 +1,133 @@
-# Bhop the Backrooms!
+# Bhop the Backrooms
 
-Native UE4SS mod that ports the GoldSrc movement formulas to Escape the Backrooms.
-Valve's `pm_shared.c` is the behavioral reference. Unreal remains responsible
-for collision, stairs, floor detection, prediction, and replication.
+GoldSrc movement for Escape the Backrooms, implemented as a native UE4SS mod.
 
-## Multiplayer
+The movement math follows Valve's [`pm_shared.c`](https://github.com/ValveSoftware/halflife/blob/master/pm_shared/pm_shared.c) ground acceleration and
+friction, air acceleration and strafing, jump behavior, the CS 1.6
+mega-bunny cap, ladders, and water movement. Unreal still handles collision,
+stairs, moving platforms, prediction, replication, and server correction.
 
-The host and every PC client must install the same mod version and use the same
-physics settings. Run `bhop.status` in the console and compare the configuration
-checksum before joining. Mismatched physics settings cause Unreal server
-corrections and rubber-banding.
+## Features
+
+- GoldSrc ground and air movement
+- Hold-to-bhop with the CS 1.6 speed cap
+- Air crouching and duck rolling
+- GoldSrc ladder movement, ladder strafing, and jump-off velocity
+- GoldSrc water movement, including swimming, sinking, and sharking
+- Frame-rate-independent mouse input based on ETB's 120 FPS sensitivity
+- Native fallback for scripted movement and level-transition ladders
+- Deterministic physics configuration checksum for multiplayer
+
+## Requirements
+
+- Escape the Backrooms Steam build `23657885`
+- Unreal Engine 4.27 game build
+- [ETBCommunity UE4SS](https://github.com/ETBCommunity/UE4SS) `1.3.0`
+- The same mod version and physics configuration on the host and every client
+
+Unsupported executable builds fail closed instead of installing an uncertain
+hook.
 
 ## Installation
 
-Copy the `bhop` directory into:
+Copy [`package/bhop`](package/bhop) into:
 
-`EscapeTheBackrooms/EscapeTheBackrooms/Binaries/Win64/ue4ss/Mods/`
+```text
+EscapeTheBackrooms/EscapeTheBackrooms/Binaries/Win64/ue4ss/Mods/
+```
 
-The installed package must contain:
+The resulting installation should contain:
 
-- `bhop/dlls/main.dll`
-- `bhop/bhop.ini`
-- `bhop/enabled.txt`
+```text
+Mods/
+└── bhop/
+    ├── bhop.ini
+    ├── enabled.txt
+    └── dlls/
+        └── main.dll
+```
 
-The mod targets Steam build `23657885`, Unreal Engine 4.27, and ETBCommunity
-UE4SS `1.3.0`. Unsupported builds fail closed with a log message.
+Restart the game after replacing `main.dll`.
+
+## Multiplayer
+
+Every participating PC must install the mod. Run `bhop.status` in the UE4SS
+console and compare checksums before joining. Different physics settings make
+client prediction disagree with the server and cause corrections or
+rubber-banding.
+
+Vanilla clients are not supported.
+
+## Configuration
+
+Settings live in `bhop/bhop.ini`. Movevar values use GoldSrc units and are
+converted to Unreal centimeters at runtime.
+
+The default configuration provides:
+
+- `AutoBhop=true`
+- `BunnyhopSpeedCap=true`
+- `DuckRoll=true`
+- `RawMouseInput=true`
+- Canonical GoldSrc gravity, friction, acceleration, air acceleration, and
+  speed values
+
+`RawMouseInput` disables Unreal's legacy smoothing and removes ETB's
+frame-time scaling from mouse input. Controller look input is unchanged.
 
 ## Console commands
 
-- `bhop.toggle`
-- `bhop.autobhop`
-- `bhop.speedcap`
-- `bhop.duckroll`
-- `bhop.rawmouse`
-- `bhop.reload`
-- `bhop.status`
+| Command         | Action                                          |
+| --------------- | ----------------------------------------------- |
+| `bhop.toggle`   | Enable or disable custom movement               |
+| `bhop.autobhop` | Toggle hold-to-bhop                             |
+| `bhop.speedcap` | Toggle the CS 1.6 mega-bunny cap                |
+| `bhop.duckroll` | Toggle duck rolling                             |
+| `bhop.rawmouse` | Toggle corrected mouse input                    |
+| `bhop.reload`   | Reload `bhop.ini`                               |
+| `bhop.status`   | Show active settings, checksum, and hook status |
 
-`RawMouseInput` disables Unreal Engine's legacy mouse smoothing and clears its
-accumulated samples. It also removes ETB's frame-time scaling from mouse input;
-the existing 120 FPS sensitivity is preserved. It does not change controller
-look input.
+## Movement notes
 
-Standard pool ladders use GoldSrc's continuous ladder movement with no snap or
-transition timeline. Forward movement is projected through the ladder plane,
-side movement strafes along it, crouching uses Unreal's replicated crouch hull
-and applies the GoldSrc speed reduction, and jumping launches 270 units/s away
-from the surface. Ladder contact is checked continuously, so walking or falling
-onto the top of a ladder attaches without requiring ETB's bottom trigger.
+Ordinary pool ladders use continuous GoldSrc movement without ETB's alignment
+timeline. Cooked transition ladders remain native so
+their scripted level changes still run. Scripted climbing, balancing, pushing,
+ropes, death, and pass-out states also remain native.
 
-Swimming uses GoldSrc's full three-dimensional `PM_WaterMove` behavior:
-camera-pitch movement, 0.8 desired-speed scaling, full-vector friction, the
-60-unit idle sink, the 100-unit swim-up impulse, and its unusual total-speed
-acceleration check. A persistent native water state bypasses Unreal's
-waterline snapping and carries the result through collision-preserving flying
-physics; crossing the volume boundary transfers the unchanged velocity back to
-falling movement. Unreal still supplies collision, prediction, and replication.
+Water movement uses a persistent collision-preserving state around Unreal's
+water volumes. This prevents native waterline snapping while retaining
+Unreal's collision, prediction, and replication.
 
-Balancing, pushing, death/pass-out, ropes, and other scripted/custom movement
-continue to use ETB's native movement.
+Duck rolling reproduces GoldSrc's swept 18-unit origin pop: release crouch
+within the configured window while grounded. It changes the hull origin
+without adding jump velocity.
 
-Airborne crouching is enabled. Releasing crouch within the configured
-duck-roll window while grounded performs GoldSrc's 18-unit swept origin pop
-without adding jump velocity; chain these releases to duck roll.
+## Building
 
-## Build
-
-### Requirements
-
-- Escape the Backrooms Steam build `23657885`
-- ETBCommunity UE4SS fork `1.3.0`
-- Visual Studio 2022 with C++ desktop tools
-- CMake 3.22 or newer
+Install Visual Studio 2022 with the C++ desktop workload and CMake 3.22 or
+newer. Clone the ETBCommunity UE4SS fork at its pinned `1.3.0` commit with
+submodules initialized.
 
 ```powershell
 cmake -S . -B build-native -G "Visual Studio 17 2022" `
   -DBHOP_BUILD_UE4SS_MOD=ON `
   -DUE4SS_ROOT=C:\path\to\UE4SS
+
 cmake --build build-native --config Game__Shipping__Win64 `
   --target etb_bhop bhop_tests
-ctest --test-dir build-native -C Game__Shipping__Win64 --output-on-failure
+
+ctest --test-dir build-native `
+  -C Game__Shipping__Win64 `
+  --output-on-failure
 ```
 
-The build stages the DLL at `package/bhop/dlls/main.dll`. Copy the complete
-`package/bhop` directory into UE4SS's `Mods` directory.
+The build stages the distributable DLL at
+`package/bhop/dlls/main.dll`.
 
-The native adapter validates Steam build `23657885`, resolves the
-`CalcVelocity` virtual slot from Unreal's reflected native wrapper, and checks
-the live `UFancyMovementComponent` target before installing the detour. It
-fails closed if any check differs.
+## Project layout
+
+```text
+src/                Movement core and UE4SS integration
+tests/              Deterministic movement vectors
+package/bhop/       Ready-to-install mod package
+```

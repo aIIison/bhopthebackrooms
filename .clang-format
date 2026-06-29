@@ -27,7 +27,7 @@ SpaceInEmptyParentheses: true
 SpacesBeforeTrailingComments: 2
 AlignTrailingComments: true
 SpacesInAngles: true
-SpacesInContainerLiterals: true
+SpacesInContainerLiterals: false
 SpacesInCStyleCastParentheses: true
 SpacesInParentheses: true
 SpacesInSquareBrackets: true

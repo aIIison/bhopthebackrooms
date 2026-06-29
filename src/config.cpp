@@ -1,5 +1,6 @@
+#include "config.h"
+
 #include <algorithm>
-#include <bhop/config.h>
 #include <bit>
 #include <cctype>
 #include <charconv>
