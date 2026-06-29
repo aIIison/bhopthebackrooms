@@ -37,11 +37,11 @@ namespace bhop {
 		}
 
 		auto parse_double( const std::string& value ) -> std::optional< double > {
-			double      result{ };
+			double      result{};
 			const auto* begin  = value.data( );
 			const auto* end    = begin + value.size( );
 			const auto  parsed = std::from_chars( begin, end, result );
-			if ( parsed.ec != std::errc{ } || parsed.ptr != end || !std::isfinite( result ) ) {
+			if ( parsed.ec != std::errc{} || parsed.ptr != end || !std::isfinite( result ) ) {
 				return std::nullopt;
 			}
 			return result;
@@ -115,11 +115,11 @@ namespace bhop {
 		     config.duck_roll_height > 72.0 ) {
 			return "duck-roll window or height is outside its supported range";
 		}
-		return { };
+		return {};
 	}
 
 	auto load_config( const std::filesystem::path& path ) -> config_result_t {
-		config_result_t result{ };
+		config_result_t result{};
 		std::ifstream   input{ path };
 		if ( !input ) {
 			result.error = "could not open " + path.string( );
@@ -129,7 +129,7 @@ namespace bhop {
 		std::unordered_map< std::string, std::string > entries;
 		std::string                                    section;
 		std::string                                    line;
-		std::size_t                                    line_number{ };
+		std::size_t                                    line_number{};
 		while ( std::getline( input, line ) ) {
 			++line_number;
 			line = trim( std::move( line ) );

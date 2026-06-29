@@ -25,6 +25,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -45,15 +46,15 @@ namespace {
 	constexpr double        gold_src_crouch_speed_multiplier = 1.0 / 3.0;
 	constexpr double        mouse_reference_fps              = 120.0;
 
-	using calc_velocity_fn_t = void ( * )( UObject*, float, float, bool, float );
-	using can_crouch_fn_t     = bool ( * )( UObject* );
+	using calc_velocity_fn_t          = void ( * )( UObject*, float, float, bool, float );
+	using can_crouch_fn_t             = bool ( * )( UObject* );
 	using physics_volume_changed_fn_t = void ( * )( UObject*, UObject* );
 
 	class c_etb_bhop_mod;
-	c_etb_bhop_mod*    g_mod{ };
-	calc_velocity_fn_t g_original_calc_velocity{ };
-	can_crouch_fn_t     g_original_can_crouch{ };
-	physics_volume_changed_fn_t g_original_physics_volume_changed{ };
+	c_etb_bhop_mod*             g_mod{};
+	calc_velocity_fn_t          g_original_calc_velocity{};
+	can_crouch_fn_t             g_original_can_crouch{};
+	physics_volume_changed_fn_t g_original_physics_volume_changed{};
 
 	enum class e_pointer_kind : std::uint8_t {
 		unknown,
@@ -63,18 +64,18 @@ namespace {
 	};
 
 	struct movement_properties_t {
-		FProperty*     character_owner{ };
-		FProperty*     velocity{ };
-		FProperty*     acceleration{ };
-		FProperty*     max_acceleration{ };
-		FProperty*     movement_mode{ };
-		FProperty*     gravity_scale{ };
-		FProperty*     jump_z_velocity{ };
-		FProperty*     max_walk_speed{ };
-		FProperty*     max_walk_speed_crouched{ };
-		FProperty*     max_sprint_speed{ };
-		FProperty*     max_swim_speed{ };
-		FBoolProperty* wants_to_crouch{ };
+		FProperty*     character_owner{};
+		FProperty*     velocity{};
+		FProperty*     acceleration{};
+		FProperty*     max_acceleration{};
+		FProperty*     movement_mode{};
+		FProperty*     gravity_scale{};
+		FProperty*     jump_z_velocity{};
+		FProperty*     max_walk_speed{};
+		FProperty*     max_walk_speed_crouched{};
+		FProperty*     max_sprint_speed{};
+		FProperty*     max_swim_speed{};
+		FBoolProperty* wants_to_crouch{};
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
 			return character_owner && velocity && acceleration && max_acceleration &&
@@ -85,21 +86,21 @@ namespace {
 	};
 
 	struct character_properties_t {
-		FBoolProperty* pressed_jump{ };
-		FProperty*     jump_key_hold_time{ };
-		FProperty*     controller{ };
-		FBoolProperty* client_updating{ };
-		FBoolProperty* was_jumping{ };
-		FBoolProperty* can_move{ };
-		FBoolProperty* is_dead{ };
-		FBoolProperty* is_climbing{ };
-		FBoolProperty* is_climbing_ladder{ };
-		FBoolProperty* is_balancing{ };
-		FBoolProperty* is_falling_balance{ };
-		FBoolProperty* is_pushing{ };
-		FBoolProperty* is_crouched{ };
-		FBoolProperty* has_water_physics{ };
-		FBoolProperty* wants_to_crouch_after_landing{ };
+		FBoolProperty* pressed_jump{};
+		FProperty*     jump_key_hold_time{};
+		FProperty*     controller{};
+		FBoolProperty* client_updating{};
+		FBoolProperty* was_jumping{};
+		FBoolProperty* can_move{};
+		FBoolProperty* is_dead{};
+		FBoolProperty* is_climbing{};
+		FBoolProperty* is_climbing_ladder{};
+		FBoolProperty* is_balancing{};
+		FBoolProperty* is_falling_balance{};
+		FBoolProperty* is_pushing{};
+		FBoolProperty* is_crouched{};
+		FBoolProperty* has_water_physics{};
+		FBoolProperty* wants_to_crouch_after_landing{};
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
 			return pressed_jump && jump_key_hold_time && controller && client_updating &&
@@ -111,41 +112,41 @@ namespace {
 	};
 
 	struct movement_state_t {
-		bool   overriding{ };
-		bool   replaying{ };
-		bool   has_crouch_state{ };
-		bool   last_wants_crouch{ };
-		double crouch_hold_seconds{ };
-		float  gravity_scale{ };
-		float  jump_z_velocity{ };
-		float  max_walk_speed{ };
-		float  max_walk_speed_crouched{ };
-		float  max_sprint_speed{ };
-		float  max_swim_speed{ };
+		bool   overriding{};
+		bool   replaying{};
+		bool   has_crouch_state{};
+		bool   last_wants_crouch{};
+		double crouch_hold_seconds{};
+		float  gravity_scale{};
+		float  jump_z_velocity{};
+		float  max_walk_speed{};
+		float  max_walk_speed_crouched{};
+		float  max_sprint_speed{};
+		float  max_swim_speed{};
 	};
 
 	struct axis_input_params_t {
-		float axis_value{ };
+		float axis_value{};
 	};
 
 	struct ladder_overlap_params_t {
-		UObject* overlapped_component{ };
-		UObject* other_actor{ };
+		UObject* overlapped_component{};
+		UObject* other_actor{};
 	};
 
 	struct ladder_state_t {
-		UObject* ladder{ };
-		bhop::vec3_t start{ };
-		bhop::vec3_t end{ };
-		double half_width_cm{ };
-		double contact_depth_cm{ };
-		bool     on_floor{ };
+		UObject*     ladder{};
+		bhop::vec3_t start{};
+		bhop::vec3_t end{};
+		double       half_width_cm{};
+		double       contact_depth_cm{};
+		bool         on_floor{};
 	};
 
 	struct water_state_t {
 		bool   submerged{ true };
-		double outside_seconds{ };
-		double outside_limit_seconds{ };
+		double outside_seconds{};
+		double outside_limit_seconds{};
 	};
 
 	template < typename T >
@@ -208,7 +209,7 @@ namespace {
 	}
 
 	[[nodiscard]] auto is_executable_game_address( const void* address ) noexcept -> bool {
-		MEMORY_BASIC_INFORMATION information{ };
+		MEMORY_BASIC_INFORMATION information{};
 		if ( !address ||
 		     VirtualQuery( address, &information, sizeof( information ) ) !=
 		         sizeof( information ) ) {
@@ -244,19 +245,19 @@ namespace {
 	[[nodiscard]] auto follow_jump_thunks( void* address ) noexcept -> void* {
 		auto* current = static_cast< std::uint8_t* >( address );
 		for ( int depth = 0; depth < 4 && is_executable_game_address( current ); ++depth ) {
-			ZydisDecoder decoder{ };
+			ZydisDecoder decoder{};
 			if ( !ZYAN_SUCCESS( ZydisDecoderInit( &decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64 ) ) ) {
 				break;
 			}
-			ZydisDecodedInstruction instruction{ };
-			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+			ZydisDecodedInstruction instruction{};
+			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{};
 			if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, current, 16, &instruction, operands ) ) ||
 			     instruction.mnemonic != ZYDIS_MNEMONIC_JMP ||
 			     operands[ 0 ].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
 			     !operands[ 0 ].imm.is_relative ) {
 				break;
 			}
-			ZyanU64 target{ };
+			ZyanU64 target{};
 			if ( !ZYAN_SUCCESS( ZydisCalcAbsoluteAddress(
 			         &instruction,
 			         &operands[ 0 ],
@@ -285,7 +286,7 @@ namespace {
 			return std::nullopt;
 		}
 
-		ZydisDecoder decoder{ };
+		ZydisDecoder decoder{};
 		if ( !ZYAN_SUCCESS( ZydisDecoderInit(
 		         &decoder,
 		         ZYDIS_MACHINE_MODE_LONG_64,
@@ -293,15 +294,15 @@ namespace {
 			return std::nullopt;
 		}
 
-		std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
+		std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{};
 		kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
 		std::vector< std::size_t > candidates;
 		std::vector< void* >       direct_targets;
-		std::size_t                offset{ };
+		std::size_t                offset{};
 
 		while ( offset < 1024 ) {
-			ZydisDecodedInstruction instruction{ };
-			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+			ZydisDecodedInstruction instruction{};
+			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{};
 			if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull(
 			         &decoder,
 			         code + offset,
@@ -324,7 +325,7 @@ namespace {
 					    static_cast< std::size_t >( operand.mem.disp.value ) /
 					    sizeof( void* ) );
 				} else if ( operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && operand.imm.is_relative ) {
-					ZyanU64 absolute_address{ };
+					ZyanU64 absolute_address{};
 					if ( ZYAN_SUCCESS( ZydisCalcAbsoluteAddress(
 					         &instruction,
 					         &operand,
@@ -398,7 +399,7 @@ namespace {
 			return std::nullopt;
 		}
 
-		ZydisDecoder decoder{ };
+		ZydisDecoder decoder{};
 		if ( !ZYAN_SUCCESS( ZydisDecoderInit( &decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64 ) ) ) {
 			return std::nullopt;
 		}
@@ -410,15 +411,15 @@ namespace {
 				continue;
 			}
 
-			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
+			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{};
 			kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
-			bool        reads_movement_mode{ };
-			bool        compares_falling{ };
-			bool        reached_return{ };
-			std::size_t offset{ };
+			bool        reads_movement_mode{};
+			bool        compares_falling{};
+			bool        reached_return{};
+			std::size_t offset{};
 			while ( offset < 64 ) {
-				ZydisDecodedInstruction instruction{ };
-				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+				ZydisDecodedInstruction instruction{};
+				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{};
 				if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, code + offset, 64 - offset, &instruction, operands ) ) ) {
 					break;
 				}
@@ -483,16 +484,16 @@ namespace {
 			}
 			visited.push_back( vtable[ slot ] );
 
-			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
+			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{};
 			kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
-			bool        calls_falling{ };
-			bool        calls_ground{ };
-			bool        reads_updated_component{ };
-			bool        reached_return{ };
-			std::size_t offset{ };
+			bool        calls_falling{};
+			bool        calls_ground{};
+			bool        reads_updated_component{};
+			bool        reached_return{};
+			std::size_t offset{};
 			while ( offset < 192 ) {
-				ZydisDecodedInstruction instruction{ };
-				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+				ZydisDecodedInstruction instruction{};
+				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{};
 				if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, code + offset, 192 - offset, &instruction, operands ) ) ) {
 					break;
 				}
@@ -518,7 +519,7 @@ namespace {
 						calls_falling |= called_slot == falling_slot;
 						calls_ground |= called_slot == ground_slot;
 					} else if ( operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && operand.imm.is_relative ) {
-						ZyanU64 target{ };
+						ZyanU64 target{};
 						if ( ZYAN_SUCCESS( ZydisCalcAbsoluteAddress( &instruction, &operand, reinterpret_cast< ZyanU64 >( code + offset ), &target ) ) ) {
 							calls_falling |= reinterpret_cast< void* >( target ) == vtable[ falling_slot ];
 							calls_ground |= reinterpret_cast< void* >( target ) == vtable[ ground_slot ];
@@ -573,7 +574,7 @@ namespace {
 			return std::nullopt;
 		}
 
-		ZydisDecoder decoder{ };
+		ZydisDecoder decoder{};
 		if ( !ZYAN_SUCCESS( ZydisDecoderInit( &decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64 ) ) ) {
 			return std::nullopt;
 		}
@@ -587,16 +588,16 @@ namespace {
 			}
 			visited.push_back( code );
 
-			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
+			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{};
 			kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
 			kinds[ ZYDIS_REGISTER_RDX ] = e_pointer_kind::volume_object;
-			bool        reads_water_volume{ };
-			bool        uses_swimming_mode{ };
-			bool        reached_return{ };
-			std::size_t offset{ };
+			bool        reads_water_volume{};
+			bool        uses_swimming_mode{};
+			bool        reached_return{};
+			std::size_t offset{};
 			while ( offset < 768 ) {
-				ZydisDecodedInstruction instruction{ };
-				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+				ZydisDecodedInstruction instruction{};
+				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{};
 				if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, code + offset, 768 - offset, &instruction, operands ) ) ) {
 					break;
 				}
@@ -768,7 +769,7 @@ namespace {
 			apply_mouse_settings( );
 			register_commands( );
 			register_jump_hooks( );
-			RC::Unreal::Hook::FCallbackOptions options{ };
+			RC::Unreal::Hook::FCallbackOptions options{};
 			options.OwnerModName = STR( "bhop" );
 			options.HookName     = STR( "InstallCalcVelocity" );
 			install_tick_id_ =
@@ -833,12 +834,24 @@ namespace {
 			state.replaying = replaying;
 
 			if ( const auto ladder = ladder_states_.find( owner ); ladder != ladder_states_.end( ) ) {
-				if ( config_.enabled ) {
+				const bool native_ladder_transition =
+				    !bool_value( owner, character_properties_.can_move, false ) ||
+				    bool_value( owner, character_properties_.is_dead ) ||
+				    bool_value( owner, character_properties_.is_climbing ) ||
+				    bool_value( owner, character_properties_.is_climbing_ladder ) ||
+				    bool_value( owner, character_properties_.is_balancing ) ||
+				    bool_value( owner, character_properties_.is_falling_balance ) ||
+				    bool_value( owner, character_properties_.is_pushing );
+				if ( config_.enabled && !native_ladder_transition ) {
 					restore_properties( movement, state );
 					handle_ladder_velocity( movement, owner, *mode, ladder->second );
 					return;
 				}
 				ladder_states_.erase( ladder );
+				restore_properties( movement, state );
+				if ( native_ladder_transition ) {
+					return call_original( movement, delta_seconds, friction, fluid, braking_deceleration );
+				}
 				set_movement_mode( movement, movement_falling );
 			}
 
@@ -921,8 +934,8 @@ namespace {
 			bool       vertical_velocity_overridden = false;
 			bool       crouched_jump_started        = false;
 			const bool wants_crouch                 = bool_value(
-                movement,
-                movement_properties_.wants_to_crouch );
+			    movement,
+			    movement_properties_.wants_to_crouch );
 			const bool released_quick_crouch =
 			    state.has_crouch_state &&
 			    state.last_wants_crouch &&
@@ -944,7 +957,7 @@ namespace {
 				const double lift =
 				    bhop::source_to_cm( config_.duck_roll_height );
 				target_location.SetZ( target_location.Z( ) + lift );
-				RC::Unreal::FHitResult sweep_result{ };
+				RC::Unreal::FHitResult sweep_result{};
 				actor->K2_SetActorLocation(
 				    target_location,
 				    true,
@@ -1037,9 +1050,9 @@ namespace {
 			if ( !owner ) {
 				return false;
 			}
-			auto** movement_storage = owner->GetValuePtrByPropertyNameInChain< UObject* >( STR( "CharacterMovement" ) );
-			UObject* movement       = movement_storage ? *movement_storage : nullptr;
-			const auto* mode        = property_value< std::uint8_t >( movement, movement_properties_.movement_mode );
+			auto**      movement_storage = owner->GetValuePtrByPropertyNameInChain< UObject* >( STR( "CharacterMovement" ) );
+			UObject*    movement         = movement_storage ? *movement_storage : nullptr;
+			const auto* mode             = property_value< std::uint8_t >( movement, movement_properties_.movement_mode );
 			return water_states_.contains( owner ) ||
 			    ( mode && *mode == movement_swimming ) ||
 			    bool_value( owner, character_properties_.has_water_physics );
@@ -1077,8 +1090,8 @@ namespace {
 				return false;
 			}
 
-			auto** owner_storage = property_value< UObject* >( movement, movement_properties_.character_owner );
-			UObject* owner       = owner_storage ? *owner_storage : nullptr;
+			auto**   owner_storage = property_value< UObject* >( movement, movement_properties_.character_owner );
+			UObject* owner         = owner_storage ? *owner_storage : nullptr;
 			if ( !owner ||
 			     !bool_value( owner, character_properties_.can_move, false ) ||
 			     bool_value( owner, character_properties_.is_dead ) ||
@@ -1092,7 +1105,7 @@ namespace {
 			}
 
 			restore_properties( movement, states_[ movement ] );
-			water_states_[ owner ] = { };
+			water_states_[ owner ] = {};
 			if ( !set_movement_mode( movement, movement_flying ) ) {
 				water_states_.erase( owner );
 				return false;
@@ -1246,7 +1259,7 @@ namespace {
 				return false;
 			}
 
-			std::array< std::uint8_t, 16 > parameters{ };
+			std::array< std::uint8_t, 16 > parameters{};
 			*set_movement_mode_property_
 			     ->ContainerPtrToValuePtr< std::uint8_t >( parameters.data( ) ) =
 			    mode;
@@ -1270,10 +1283,10 @@ namespace {
 				return false;
 			}
 
-			alignas( 16 ) std::array< std::uint8_t, 16 > parameters{ };
+			alignas( 16 ) std::array< std::uint8_t, 16 > parameters{};
 			movement->ProcessEvent( get_physics_volume_function_, parameters.data( ) );
-			auto** volume_storage = get_physics_volume_return_property_->ContainerPtrToValuePtr< UObject* >( parameters.data( ) );
-			UObject* volume       = volume_storage ? *volume_storage : nullptr;
+			auto**   volume_storage = get_physics_volume_return_property_->ContainerPtrToValuePtr< UObject* >( parameters.data( ) );
+			UObject* volume         = volume_storage ? *volume_storage : nullptr;
 			if ( !volume ) {
 				return false;
 			}
@@ -1295,8 +1308,8 @@ namespace {
 			auto**             controller_storage = property_value< UObject* >( owner, character_properties_.controller );
 			UObject*           controller         = controller_storage ? *controller_storage : nullptr;
 			const auto*        control_rotation   = controller
-			             ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
-			             : nullptr;
+			    ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
+			    : nullptr;
 			const auto         view_rotation      = control_rotation ? *control_rotation : player_actor->K2_GetActorRotation( );
 			const double       view_pitch         = view_rotation.GetPitch( ) * std::numbers::pi / 180.0;
 			const double       view_yaw           = view_rotation.GetYaw( ) * std::numbers::pi / 180.0;
@@ -1314,17 +1327,17 @@ namespace {
 			const double side_acceleration =
 			    acceleration->X( ) * view_right.x +
 			    acceleration->Y( ) * view_right.y;
-			const double input_threshold      = std::max( 1.0, static_cast< double >( *max_acceleration ) * 0.01 );
-			const auto   forward_input        = forward_input_.find( owner );
-			const auto   side_input           = side_input_.find( owner );
-			const double forward_move         = forward_input != forward_input_.end( )
-			             ? std::clamp( static_cast< double >( forward_input->second ), -1.0, 1.0 )
-			             : ( std::abs( forward_acceleration ) >= input_threshold ? std::copysign( 1.0, forward_acceleration ) : 0.0 );
-			const double side_move = side_input != side_input_.end( )
-			             ? std::clamp( static_cast< double >( side_input->second ), -1.0, 1.0 )
-			             : ( std::abs( side_acceleration ) >= input_threshold ? std::copysign( 1.0, side_acceleration ) : 0.0 );
-			const auto*  jump_key_hold_time   = property_value< float >( owner, character_properties_.jump_key_hold_time );
-			const bool   swim_up              = jump_held_[ owner ] ||
+			const double input_threshold    = std::max( 1.0, static_cast< double >( *max_acceleration ) * 0.01 );
+			const auto   forward_input      = forward_input_.find( owner );
+			const auto   side_input         = side_input_.find( owner );
+			const double forward_move       = forward_input != forward_input_.end( )
+			    ? std::clamp( static_cast< double >( forward_input->second ), -1.0, 1.0 )
+			    : ( std::abs( forward_acceleration ) >= input_threshold ? std::copysign( 1.0, forward_acceleration ) : 0.0 );
+			const double side_move          = side_input != side_input_.end( )
+			    ? std::clamp( static_cast< double >( side_input->second ), -1.0, 1.0 )
+			    : ( std::abs( side_acceleration ) >= input_threshold ? std::copysign( 1.0, side_acceleration ) : 0.0 );
+			const auto*  jump_key_hold_time = property_value< float >( owner, character_properties_.jump_key_hold_time );
+			const bool   swim_up            = jump_held_[ owner ] ||
 			    bool_value( owner, character_properties_.pressed_jump ) ||
 			    ( jump_key_hold_time && *jump_key_hold_time > 0.0F );
 			const bool swim_down = !swim_up && bool_value( movement, movement_properties_.wants_to_crouch );
@@ -1354,14 +1367,14 @@ namespace {
 				return;
 			}
 
-			auto*              player_actor       = static_cast< RC::Unreal::AActor* >( owner );
-			auto**             controller_storage = property_value< UObject* >( owner, character_properties_.controller );
-			UObject*           controller         = controller_storage ? *controller_storage : nullptr;
-			const auto*        control_rotation   = controller
-			             ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
-			             : nullptr;
-			const auto   view_rotation = control_rotation ? *control_rotation : player_actor->K2_GetActorRotation( );
-			const double yaw           = view_rotation.GetYaw( ) * std::numbers::pi / 180.0;
+			auto*        player_actor       = static_cast< RC::Unreal::AActor* >( owner );
+			auto**       controller_storage = property_value< UObject* >( owner, character_properties_.controller );
+			UObject*     controller         = controller_storage ? *controller_storage : nullptr;
+			const auto*  control_rotation   = controller
+			    ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
+			    : nullptr;
+			const auto   view_rotation      = control_rotation ? *control_rotation : player_actor->K2_GetActorRotation( );
+			const double yaw                = view_rotation.GetYaw( ) * std::numbers::pi / 180.0;
 
 			bhop::vec3_t input_acceleration{ acceleration->X( ), acceleration->Y( ), 0.0 };
 			const auto   forward_input = forward_input_.find( owner );
@@ -1400,7 +1413,7 @@ namespace {
 				return std::nullopt;
 			}
 
-			alignas( 16 ) std::array< std::uint8_t, 32 > parameters{ };
+			alignas( 16 ) std::array< std::uint8_t, 32 > parameters{};
 			object->ProcessEvent( function, parameters.data( ) );
 			const auto* value = return_property->ContainerPtrToValuePtr< FVector >( parameters.data( ) );
 			if ( !value ) {
@@ -1421,7 +1434,7 @@ namespace {
 			}
 
 			const bhop::vec3_t axis{ segment.x / length, segment.y / length, segment.z / length };
-			bhop::vec3_t side{
+			bhop::vec3_t       side{
 				axis.y * normal.z - axis.z * normal.y,
 				axis.z * normal.x - axis.x * normal.z,
 				axis.x * normal.y - axis.y * normal.x,
@@ -1439,11 +1452,11 @@ namespace {
 				player.y - state.start.y,
 				player.z - state.start.z,
 			};
-			const double along         = relative.x * axis.x + relative.y * axis.y + relative.z * axis.z;
-			const double from_plane    = relative.x * normal.x + relative.y * normal.y + relative.z * normal.z;
-			const double from_center   = relative.x * side.x + relative.y * side.y + relative.z * side.z;
-			const double axial_margin  = bhop::source_to_cm( 36.0 );
-			const double hull_radius   = bhop::source_to_cm( 16.0 );
+			const double along        = relative.x * axis.x + relative.y * axis.y + relative.z * axis.z;
+			const double from_plane   = relative.x * normal.x + relative.y * normal.y + relative.z * normal.z;
+			const double from_center  = relative.x * side.x + relative.y * side.y + relative.z * side.z;
+			const double axial_margin = bhop::source_to_cm( 36.0 );
+			const double hull_radius  = bhop::source_to_cm( 16.0 );
 
 			return along >= -axial_margin &&
 			    along <= length + axial_margin &&
@@ -1456,14 +1469,23 @@ namespace {
 			set_movement_mode( movement, movement_falling );
 		}
 
+		[[nodiscard]] auto is_native_transition_ladder( UObject* ladder ) const -> bool {
+			if ( !ladder ) {
+				return false;
+			}
+			const auto path = ladder->GetPathName( );
+			return path.find( STR( "BP_Pool_Ladder_ClimbUp" ) ) != RC::StringType::npos ||
+			    path.find( STR( "BP_Pool_Ladder_Transition" ) ) != RC::StringType::npos;
+		}
+
 		[[nodiscard]] auto ladder_normal_for_player( UObject* ladder, UObject* owner ) const -> bhop::vec3_t {
-			auto*      ladder_actor    = static_cast< RC::Unreal::AActor* >( ladder );
-			auto*      player_actor    = static_cast< RC::Unreal::AActor* >( owner );
-			const auto ladder_location = ladder_actor->K2_GetActorLocation( );
-			const auto player_location = player_actor->K2_GetActorLocation( );
-			const auto ladder_rotation = ladder_actor->K2_GetActorRotation( );
-			const auto pitch           = ladder_rotation.GetPitch( ) * std::numbers::pi / 180.0;
-			const auto yaw             = ladder_rotation.GetYaw( ) * std::numbers::pi / 180.0;
+			auto*        ladder_actor    = static_cast< RC::Unreal::AActor* >( ladder );
+			auto*        player_actor    = static_cast< RC::Unreal::AActor* >( owner );
+			const auto   ladder_location = ladder_actor->K2_GetActorLocation( );
+			const auto   player_location = player_actor->K2_GetActorLocation( );
+			const auto   ladder_rotation = ladder_actor->K2_GetActorRotation( );
+			const auto   pitch           = ladder_rotation.GetPitch( ) * std::numbers::pi / 180.0;
+			const auto   yaw             = ladder_rotation.GetYaw( ) * std::numbers::pi / 180.0;
 			bhop::vec3_t normal{
 				std::cos( pitch ) * std::cos( yaw ),
 				std::cos( pitch ) * std::sin( yaw ),
@@ -1489,10 +1511,10 @@ namespace {
 				return;
 			}
 
-			auto*        ladder_actor    = static_cast< RC::Unreal::AActor* >( state.ladder );
-			auto*        player_actor    = static_cast< RC::Unreal::AActor* >( owner );
-			const auto   player_location = player_actor->K2_GetActorLocation( );
-			const auto   ladder_normal  = ladder_normal_for_player( ladder_actor, player_actor );
+			auto*              ladder_actor    = static_cast< RC::Unreal::AActor* >( state.ladder );
+			auto*              player_actor    = static_cast< RC::Unreal::AActor* >( owner );
+			const auto         player_location = player_actor->K2_GetActorLocation( );
+			const auto         ladder_normal   = ladder_normal_for_player( ladder_actor, player_actor );
 			const bhop::vec3_t player_position{ player_location.X( ), player_location.Y( ), player_location.Z( ) };
 			if ( !ladder_contains_player( state, player_position, ladder_normal ) ) {
 				detach_from_ladder( movement, owner );
@@ -1502,8 +1524,8 @@ namespace {
 			auto**             controller_storage = property_value< UObject* >( owner, character_properties_.controller );
 			UObject*           controller         = controller_storage ? *controller_storage : nullptr;
 			const auto*        control_rotation   = controller
-			             ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
-			             : nullptr;
+			    ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
+			    : nullptr;
 			const auto         view_rotation      = control_rotation ? *control_rotation : player_actor->K2_GetActorRotation( );
 			const double       view_pitch         = view_rotation.GetPitch( ) * std::numbers::pi / 180.0;
 			const double       view_yaw           = view_rotation.GetYaw( ) * std::numbers::pi / 180.0;
@@ -1524,17 +1546,54 @@ namespace {
 			    bool_value( owner, character_properties_.pressed_jump ) ||
 			    ( jump_key_hold_time && *jump_key_hold_time > 0.0F );
 
-			const auto result = bhop::calculate_ladder_velocity( {
-			                                                         .view_forward  = view_forward,
-			                                                         .view_right    = view_right,
-			                                                         .ladder_normal = ladder_normal,
-			                                                         .forward_move  = forward_move,
-			                                                         .side_move     = side_move,
-			                                                         .crouched      = bool_value( owner, character_properties_.is_crouched ) || bool_value( movement, movement_properties_.wants_to_crouch ),
-			                                                         .on_floor      = state.on_floor,
-			                                                         .jump_queued   = jump_queued,
-			                                                     },
-			                                                     config_.move );
+			const auto         result = bhop::calculate_ladder_velocity( {
+			                                                                 .view_forward  = view_forward,
+			                                                                 .view_right    = view_right,
+			                                                                 .ladder_normal = ladder_normal,
+			                                                                 .forward_move  = forward_move,
+			                                                                 .side_move     = side_move,
+			                                                                 .crouched      = bool_value( owner, character_properties_.is_crouched ) || bool_value( movement, movement_properties_.wants_to_crouch ),
+			                                                                 .on_floor      = state.on_floor,
+			                                                                 .jump_queued   = jump_queued,
+			                                                             },
+			                                                             config_.move );
+			const bhop::vec3_t ladder_segment{
+				state.end.x - state.start.x,
+				state.end.y - state.start.y,
+				state.end.z - state.start.z,
+			};
+			const double ladder_length = std::sqrt(
+			    ladder_segment.x * ladder_segment.x +
+			    ladder_segment.y * ladder_segment.y +
+			    ladder_segment.z * ladder_segment.z );
+			const bhop::vec3_t from_start{
+				player_position.x - state.start.x,
+				player_position.y - state.start.y,
+				player_position.z - state.start.z,
+			};
+			const double progress        = ladder_length > 1.0
+			    ? ( from_start.x * ladder_segment.x +
+			        from_start.y * ladder_segment.y +
+			        from_start.z * ladder_segment.z ) /
+			        ladder_length
+			    : 0.0;
+			const double ascending_speed = ladder_length > 1.0
+			    ? ( result.velocity_cm.x * ladder_segment.x +
+			        result.velocity_cm.y * ladder_segment.y +
+			        result.velocity_cm.z * ladder_segment.z ) /
+			        ladder_length
+			    : 0.0;
+			if ( !result.detached &&
+			     progress >= ladder_length - bhop::source_to_cm( 12.0 ) &&
+			     ascending_speed > 1.0 ) {
+				velocity->SetX( result.velocity_cm.x );
+				velocity->SetY( result.velocity_cm.y );
+				velocity->SetZ( result.velocity_cm.z );
+				ladder_states_.erase( owner );
+				set_movement_mode( movement, movement_falling );
+				return;
+			}
+
 			velocity->SetX( result.velocity_cm.x );
 			velocity->SetY( result.velocity_cm.y );
 			velocity->SetZ( result.velocity_cm.z );
@@ -1546,9 +1605,15 @@ namespace {
 		}
 
 		[[nodiscard]] auto activate_ladder( UObject* ladder, UObject* owner, bool require_contact = false ) -> bool {
-			if ( !hook_ready_ || !config_.enabled || !owner || !owner->IsA( character_class_ ) ||
+			if ( !hook_ready_ || !config_.enabled || is_native_transition_ladder( ladder ) ||
+			     !owner || !owner->IsA( character_class_ ) ||
 			     !bool_value( owner, character_properties_.can_move, false ) ||
-			     bool_value( owner, character_properties_.is_dead ) ) {
+			     bool_value( owner, character_properties_.is_dead ) ||
+			     bool_value( owner, character_properties_.is_climbing ) ||
+			     bool_value( owner, character_properties_.is_climbing_ladder ) ||
+			     bool_value( owner, character_properties_.is_balancing ) ||
+			     bool_value( owner, character_properties_.is_falling_balance ) ||
+			     bool_value( owner, character_properties_.is_pushing ) ) {
 				return false;
 			}
 
@@ -1565,10 +1630,10 @@ namespace {
 				return false;
 			}
 
-			double half_width_cm     = bhop::source_to_cm( 32.0 );
-			double contact_depth_cm = bhop::source_to_cm( 16.0 );
-			auto** box_storage       = ladder->GetValuePtrByPropertyNameInChain< UObject* >( STR( "Box1" ) );
-			UObject* box             = box_storage ? *box_storage : nullptr;
+			double   half_width_cm    = bhop::source_to_cm( 32.0 );
+			double   contact_depth_cm = bhop::source_to_cm( 2.0 );
+			auto**   box_storage      = ladder->GetValuePtrByPropertyNameInChain< UObject* >( STR( "Box1" ) );
+			UObject* box              = box_storage ? *box_storage : nullptr;
 			if ( box ) {
 				if ( const auto extent = read_vector_return( box, box_extent_function_, box_extent_return_property_, STR( "GetScaledBoxExtent" ) ) ) {
 					half_width_cm = std::clamp(
@@ -1587,10 +1652,10 @@ namespace {
 				.on_floor         = *mode == movement_walking,
 			};
 			if ( require_contact ) {
-				auto*      player_actor    = static_cast< RC::Unreal::AActor* >( owner );
-				const auto player_location = player_actor->K2_GetActorLocation( );
+				auto*              player_actor    = static_cast< RC::Unreal::AActor* >( owner );
+				const auto         player_location = player_actor->K2_GetActorLocation( );
 				const bhop::vec3_t player_position{ player_location.X( ), player_location.Y( ), player_location.Z( ) };
-				const auto normal = ladder_normal_for_player( ladder, owner );
+				const auto         normal = ladder_normal_for_player( ladder, owner );
 				if ( !ladder_contains_player( ladder_state, player_position, normal ) ) {
 					return false;
 				}
@@ -1604,6 +1669,9 @@ namespace {
 				ladder_states_.erase( owner );
 				return false;
 			}
+			RC::Output::send< RC::LogLevel::Normal >(
+			    STR( "[bhop] GoldSrc ladder attached: {}.\n" ),
+			    ladder->GetPathName( ) );
 			return true;
 		}
 
@@ -1639,12 +1707,12 @@ namespace {
 				}
 
 				if ( in_water ) {
-					water_state.submerged            = true;
+					water_state.submerged             = true;
 					water_state.outside_seconds       = 0.0;
 					water_state.outside_limit_seconds = 0.0;
 				} else {
 					if ( water_state.submerged ) {
-						const auto* velocity = property_value< FVector >( movement, movement_properties_.velocity );
+						const auto*  velocity     = property_value< FVector >( movement, movement_properties_.velocity );
 						const double upward_speed = velocity ? std::max( 0.0, bhop::cm_to_source( velocity->Z( ) ) ) : 0.0;
 						water_state.outside_limit_seconds =
 						    std::max( 0.1, ( 2.0 * upward_speed / config_.move.gravity ) + 0.05 );
@@ -1675,7 +1743,7 @@ namespace {
 			}
 
 			restore_properties( movement, states_[ movement ] );
-			water_states_[ owner ] = { };
+			water_states_[ owner ] = {};
 			if ( set_movement_mode( movement, movement_flying ) && !water_logged_ ) {
 				RC::Output::send< RC::LogLevel::Normal >( STR( "[bhop] GoldSrc water state active.\n" ) );
 				water_logged_ = true;
@@ -1821,12 +1889,12 @@ namespace {
 				return;
 			}
 			FProperty* updated_component_property = movement->GetPropertyByNameInChain( STR( "UpdatedComponent" ) );
-			const auto can_crouch_slot = updated_component_property
-			           ? resolve_can_crouch_slot(
-			                 *object_as_vtable,
-			                 movement_properties_.movement_mode->GetOffset_Internal( ),
-			                 updated_component_property->GetOffset_Internal( ) )
-			           : std::nullopt;
+			const auto can_crouch_slot            = updated_component_property
+			    ? resolve_can_crouch_slot(
+			          *object_as_vtable,
+			          movement_properties_.movement_mode->GetOffset_Internal( ),
+			          updated_component_property->GetOffset_Internal( ) )
+			    : std::nullopt;
 			if ( !can_crouch_slot ) {
 				RC::Output::send< RC::LogLevel::Error >(
 				    STR( "[bhop] Native hook disabled: CanCrouchInCurrentState could not be validated.\n" ) );
@@ -1864,8 +1932,8 @@ namespace {
 				}
 			}
 			void* physics_volume_target = physics_volume_slot
-			          ? ( *object_as_vtable )[ *physics_volume_slot ]
-			          : nullptr;
+			    ? ( *object_as_vtable )[ *physics_volume_slot ]
+			    : nullptr;
 			if ( physics_volume_target && !is_executable_game_address( physics_volume_target ) ) {
 				physics_volume_target = nullptr;
 			}
@@ -1898,10 +1966,10 @@ namespace {
 				return;
 			}
 
-			hook_target_       = target;
-			can_crouch_target_ = can_crouch_target;
+			hook_target_                   = target;
+			can_crouch_target_             = can_crouch_target;
 			physics_volume_changed_target_ = physics_volume_target;
-			hook_ready_        = true;
+			hook_ready_                    = true;
 			RC::Output::send< RC::LogLevel::Normal >(
 			    STR( "[bhop] Native movement hooks active (CalcVelocity slot {}, CanCrouch slot {}, PhysicsVolume slot {}).\n" ),
 			    *slot,
@@ -2009,13 +2077,13 @@ namespace {
 			    RC::Unreal::UObjectGlobals::RegisterHook(
 			        STR( "/Script/Engine.Character:Jump" ),
 			        press,
-			        { },
+			        {},
 			        nullptr ) );
 			jump_hook_ids_.push_back(
 			    RC::Unreal::UObjectGlobals::RegisterHook(
 			        STR( "/Script/Engine.Character:StopJumping" ),
 			        release,
-			        { },
+			        {},
 			        nullptr ) );
 		}
 
@@ -2081,11 +2149,31 @@ namespace {
 				return;
 			}
 			const auto callback = [ this ]( RC::Unreal::UnrealScriptFunctionCallableContext& context, void* ) {
-				auto& parameters = context.GetParams< ladder_overlap_params_t >( );
-				const bool already_attached = parameters.other_actor && ladder_states_.contains( parameters.other_actor );
-				if ( already_attached || activate_ladder( context.Context, parameters.other_actor ) ) {
+				if ( is_native_transition_ladder( context.Context ) ) {
+					if ( native_ladders_logged_.insert( context.Context ).second ) {
+						RC::Output::send< RC::LogLevel::Normal >(
+						    STR( "[bhop] Native transition ladder preserved: {}.\n" ),
+						    context.Context->GetPathName( ) );
+					}
+					return;
+				}
+				auto&      parameters         = context.GetParams< ladder_overlap_params_t >( );
+				const bool already_attached   = parameters.other_actor && ladder_states_.contains( parameters.other_actor );
+				const bool ordinary_character = config_.enabled &&
+				    parameters.other_actor &&
+				    character_class_ &&
+				    parameters.other_actor->IsA( character_class_ ) &&
+				    bool_value( parameters.other_actor, character_properties_.can_move, false ) &&
+				    !bool_value( parameters.other_actor, character_properties_.is_dead ) &&
+				    !bool_value( parameters.other_actor, character_properties_.is_climbing ) &&
+				    !bool_value( parameters.other_actor, character_properties_.is_climbing_ladder );
+				if ( already_attached || ordinary_character ) {
+					if ( !already_attached ) {
+						static_cast< void >( activate_ladder( context.Context, parameters.other_actor, true ) );
+					}
 					// Make the Blueprint cast fail so ETB never starts its
-					// snap-to-ladder timeline or scripted transition.
+					// snap-to-ladder timeline. The continuous contact scan
+					// attaches once the capsule actually reaches the surface.
 					parameters.other_actor = nullptr;
 				}
 			};
@@ -2114,7 +2202,7 @@ namespace {
 		}
 
 		auto register_commands( ) -> void {
-			RC::Unreal::Hook::FCallbackOptions options{ };
+			RC::Unreal::Hook::FCallbackOptions options{};
 			options.OwnerModName = STR( "bhop" );
 			options.HookName     = STR( "ConsoleCommands" );
 
@@ -2151,52 +2239,53 @@ namespace {
 		}
 
 	private:
-		bhop::config_t                                   config_{ };
-		std::filesystem::path                            config_path_{ };
-		movement_properties_t                            movement_properties_{ };
-		character_properties_t                           character_properties_{ };
-		UClass*                                          character_class_{ };
-		UFunction*                                       set_movement_mode_function_{ };
-		FProperty*                                       set_movement_mode_property_{ };
-		FProperty*                                       mouse_delta_seconds_property_{ };
-		UFunction*                                       ladder_start_function_{ };
-		FProperty*                                       ladder_start_return_property_{ };
-		UFunction*                                       ladder_end_function_{ };
-		FProperty*                                       ladder_end_return_property_{ };
-		UFunction*                                       box_extent_function_{ };
-		FProperty*                                       box_extent_return_property_{ };
-		UFunction*                                       get_physics_volume_function_{ };
-		FProperty*                                       get_physics_volume_return_property_{ };
-		FBoolProperty*                                   water_volume_property_{ };
-		UObject*                                         input_settings_{ };
-		FBoolProperty*                                   mouse_smoothing_property_{ };
-		UFunction*                                       clear_mouse_smoothing_function_{ };
-		UFunction*                                       ladder_overlap_function_{ };
-		std::unordered_map< UObject*, movement_state_t > states_{ };
-		std::unordered_map< UObject*, ladder_state_t >   ladder_states_{ };
-		std::unordered_map< UObject*, water_state_t >    water_states_{ };
-		std::unordered_map< UObject*, bool >             jump_held_{ };
-		std::unordered_map< UObject*, bool >             crouch_held_{ };
-		std::unordered_map< UObject*, bool >             crouch_release_pending_{ };
-		std::unordered_map< UObject*, float >            forward_input_{ };
-		std::unordered_map< UObject*, float >            side_input_{ };
-		std::optional< int >                             crouch_press_event_{ };
-		std::vector< std::pair< int, int > >             jump_hook_ids_{ };
-		std::vector< std::pair< int, int > >             crouch_hook_ids_{ };
-		std::vector< std::pair< int, int > >             mouse_hook_ids_{ };
-		std::vector< std::pair< int, int > >             movement_input_hook_ids_{ };
-		std::vector< std::pair< int, int > >             ladder_hook_ids_{ };
-		RC::Unreal::Hook::GlobalCallbackId               install_tick_id_{ };
-		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{ };
-		void*                                            hook_target_{ };
-		void*                                            can_crouch_target_{ };
-		void*                                            physics_volume_changed_target_{ };
-		bool                                             install_attempted_{ };
-		bool                                             hook_ready_{ };
-		bool                                             minhook_initialized_{ };
-		bool                                             original_mouse_smoothing_{ };
-		bool                                             has_original_mouse_smoothing_{ };
-		bool                                             water_logged_{ };
+		bhop::config_t                                   config_{};
+		std::filesystem::path                            config_path_{};
+		movement_properties_t                            movement_properties_{};
+		character_properties_t                           character_properties_{};
+		UClass*                                          character_class_{};
+		UFunction*                                       set_movement_mode_function_{};
+		FProperty*                                       set_movement_mode_property_{};
+		FProperty*                                       mouse_delta_seconds_property_{};
+		UFunction*                                       ladder_start_function_{};
+		FProperty*                                       ladder_start_return_property_{};
+		UFunction*                                       ladder_end_function_{};
+		FProperty*                                       ladder_end_return_property_{};
+		UFunction*                                       box_extent_function_{};
+		FProperty*                                       box_extent_return_property_{};
+		UFunction*                                       get_physics_volume_function_{};
+		FProperty*                                       get_physics_volume_return_property_{};
+		FBoolProperty*                                   water_volume_property_{};
+		UObject*                                         input_settings_{};
+		FBoolProperty*                                   mouse_smoothing_property_{};
+		UFunction*                                       clear_mouse_smoothing_function_{};
+		UFunction*                                       ladder_overlap_function_{};
+		std::unordered_map< UObject*, movement_state_t > states_{};
+		std::unordered_map< UObject*, ladder_state_t >   ladder_states_{};
+		std::unordered_map< UObject*, water_state_t >    water_states_{};
+		std::unordered_map< UObject*, bool >             jump_held_{};
+		std::unordered_map< UObject*, bool >             crouch_held_{};
+		std::unordered_map< UObject*, bool >             crouch_release_pending_{};
+		std::unordered_map< UObject*, float >            forward_input_{};
+		std::unordered_map< UObject*, float >            side_input_{};
+		std::unordered_set< UObject* >                   native_ladders_logged_{};
+		std::optional< int >                             crouch_press_event_{};
+		std::vector< std::pair< int, int > >             jump_hook_ids_{};
+		std::vector< std::pair< int, int > >             crouch_hook_ids_{};
+		std::vector< std::pair< int, int > >             mouse_hook_ids_{};
+		std::vector< std::pair< int, int > >             movement_input_hook_ids_{};
+		std::vector< std::pair< int, int > >             ladder_hook_ids_{};
+		RC::Unreal::Hook::GlobalCallbackId               install_tick_id_{};
+		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{};
+		void*                                            hook_target_{};
+		void*                                            can_crouch_target_{};
+		void*                                            physics_volume_changed_target_{};
+		bool                                             install_attempted_{};
+		bool                                             hook_ready_{};
+		bool                                             minhook_initialized_{};
+		bool                                             original_mouse_smoothing_{};
+		bool                                             has_original_mouse_smoothing_{};
+		bool                                             water_logged_{};
 		double                                           frame_delta_seconds_{ 1.0 / 60.0 };
 	};
 

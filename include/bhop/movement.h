@@ -7,9 +7,9 @@ namespace bhop {
 	inline constexpr double centimeters_per_source_unit = 1.5;
 
 	struct vec3_t {
-		double x{ };
-		double y{ };
-		double z{ };
+		double x{};
+		double y{};
+		double z{};
 
 		[[nodiscard]] auto horizontal_length( ) const noexcept -> double;
 	};
@@ -34,37 +34,37 @@ namespace bhop {
 	};
 
 	struct movement_input_t {
-		vec3_t acceleration_cm{ };
+		vec3_t acceleration_cm{};
 		double max_input_acceleration_cm{ 1.0 };
-		double delta_seconds{ };
-		bool   grounded{ };
-		bool   jump_queued{ };
+		double delta_seconds{};
+		bool   grounded{};
+		bool   jump_queued{};
 	};
 
 	struct ladder_input_t {
-		vec3_t view_forward{ };
-		vec3_t view_right{ };
-		vec3_t ladder_normal{ };
-		double forward_move{ };
-		double side_move{ };
-		bool   crouched{ };
-		bool   on_floor{ };
-		bool   jump_queued{ };
+		vec3_t view_forward{};
+		vec3_t view_right{};
+		vec3_t ladder_normal{};
+		double forward_move{};
+		double side_move{};
+		bool   crouched{};
+		bool   on_floor{};
+		bool   jump_queued{};
 	};
 
 	struct ladder_result_t {
-		vec3_t velocity_cm{ };
-		bool   detached{ };
+		vec3_t velocity_cm{};
+		bool   detached{};
 	};
 
 	struct water_input_t {
-		vec3_t view_forward{ };
-		vec3_t view_right{ };
-		double forward_move{ };
-		double side_move{ };
-		double up_move{ };
-		double delta_seconds{ };
-		bool   swim_up{ };
+		vec3_t view_forward{};
+		vec3_t view_right{};
+		double forward_move{};
+		double side_move{};
+		double up_move{};
+		double delta_seconds{};
+		bool   swim_up{};
 	};
 
 	[[nodiscard]] auto source_to_cm( double source_units ) noexcept -> double;

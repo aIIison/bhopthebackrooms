@@ -94,7 +94,7 @@ namespace bhop {
 		[[nodiscard]] auto normalized( vec3_t value ) noexcept -> vec3_t {
 			const double length = std::sqrt( dot( value, value ) );
 			if ( length <= epsilon ) {
-				return { };
+				return {};
 			}
 			value.x /= length;
 			value.y /= length;
@@ -178,7 +178,7 @@ namespace bhop {
 	auto calculate_ladder_velocity( const ladder_input_t& input, const move_vars_t& vars ) noexcept -> ladder_result_t {
 		const vec3_t normal = normalized( input.ladder_normal );
 		if ( dot( normal, normal ) <= epsilon ) {
-			return { };
+			return {};
 		}
 
 		if ( input.jump_queued ) {
@@ -208,9 +208,9 @@ namespace bhop {
 		const vec3_t ladder_side = normalized( cross( { 0.0, 0.0, 1.0 }, normal ) );
 		const vec3_t ladder_up   = cross( normal, ladder_side );
 		vec3_t       velocity{
-            lateral.x - ladder_up.x * normal_speed,
-            lateral.y - ladder_up.y * normal_speed,
-            lateral.z - ladder_up.z * normal_speed,
+			lateral.x - ladder_up.x * normal_speed,
+			lateral.y - ladder_up.y * normal_speed,
+			lateral.z - ladder_up.z * normal_speed,
 		};
 
 		if ( input.on_floor && normal_speed > 0.0 ) {
@@ -238,7 +238,7 @@ namespace bhop {
 		const double forward = std::clamp( input.forward_move, -1.0, 1.0 ) * vars.move_speed;
 		const double side    = std::clamp( input.side_move, -1.0, 1.0 ) * vars.move_speed;
 		const double up      = std::clamp( input.up_move, -1.0, 1.0 ) * vars.move_speed;
-		vec3_t wish_velocity{
+		vec3_t       wish_velocity{
 			input.view_forward.x * forward + input.view_right.x * side,
 			input.view_forward.y * forward + input.view_right.y * side,
 			input.view_forward.z * forward + input.view_right.z * side,
@@ -259,10 +259,10 @@ namespace bhop {
 		}
 		wish_speed *= vars.water_speed_factor;
 
-		const double speed = std::sqrt( dot( velocity_cm, velocity_cm ) );
+		const double speed     = std::sqrt( dot( velocity_cm, velocity_cm ) );
 		double       new_speed = speed;
 		if ( speed > epsilon ) {
-			new_speed = std::max( 0.0, speed - dt * speed * vars.friction );
+			new_speed          = std::max( 0.0, speed - dt * speed * vars.friction );
 			const double scale = new_speed / speed;
 			velocity_cm.x *= scale;
 			velocity_cm.y *= scale;
@@ -278,7 +278,7 @@ namespace bhop {
 			return velocity_cm;
 		}
 
-		const vec3_t wish_direction = normalized( wish_velocity );
+		const vec3_t wish_direction     = normalized( wish_velocity );
 		const double acceleration_speed = std::min(
 		    vars.accelerate * source_to_cm( wish_speed ) * dt,
 		    add_speed );
@@ -291,22 +291,22 @@ namespace bhop {
 	auto physics_checksum( const move_vars_t& vars ) -> std::uint64_t {
 		std::uint64_t hash = 14695981039346656037ULL;
 		const double  values[]{
-            vars.gravity,
-            vars.friction,
-            vars.max_speed,
-            vars.move_speed,
-            vars.accelerate,
-            vars.air_accelerate,
-            vars.stop_speed,
-            vars.jump_velocity,
-            vars.air_wish_speed_cap,
-            vars.bunny_max_speed_factor,
-            vars.bunny_speed_reduction,
-            vars.ladder_speed,
-            vars.ladder_jump_velocity,
-            vars.water_speed_factor,
-            vars.water_sink_speed,
-            vars.water_swim_up_speed,
+			vars.gravity,
+			vars.friction,
+			vars.max_speed,
+			vars.move_speed,
+			vars.accelerate,
+			vars.air_accelerate,
+			vars.stop_speed,
+			vars.jump_velocity,
+			vars.air_wish_speed_cap,
+			vars.bunny_max_speed_factor,
+			vars.bunny_speed_reduction,
+			vars.ladder_speed,
+			vars.ladder_jump_velocity,
+			vars.water_speed_factor,
+			vars.water_sink_speed,
+			vars.water_swim_up_speed,
 		};
 		for ( const double value : values ) {
 			fnv_mix( hash, std::bit_cast< std::uint64_t >( value ) );
