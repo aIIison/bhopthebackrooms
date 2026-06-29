@@ -41,7 +41,14 @@ accumulated samples. It also removes ETB's frame-time scaling from mouse input;
 the existing 120 FPS sensitivity is preserved. It does not change controller
 look input.
 
-Swimming, ladders, balancing, pushing, death/pass-out, and scripted/custom
+Standard pool ladders use GoldSrc's continuous ladder movement with no snap or
+transition timeline. Forward movement is projected through the ladder plane,
+side movement strafes along it, crouching uses Unreal's replicated crouch hull
+and applies the GoldSrc speed reduction, and jumping launches 270 units/s away
+from the surface. Ladder contact is checked continuously, so walking or falling
+onto the top of a ladder attaches without requiring ETB's bottom trigger.
+
+Swimming, balancing, pushing, death/pass-out, ropes, and other scripted/custom
 movement continue to use ETB's native movement.
 
 Airborne crouching is enabled. Releasing crouch within the configured

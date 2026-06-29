@@ -37,11 +37,11 @@ namespace bhop {
 		}
 
 		auto parse_double( const std::string& value ) -> std::optional< double > {
-			double      result{};
+			double      result{ };
 			const auto* begin  = value.data( );
 			const auto* end    = begin + value.size( );
 			const auto  parsed = std::from_chars( begin, end, result );
-			if ( parsed.ec != std::errc{} || parsed.ptr != end || !std::isfinite( result ) ) {
+			if ( parsed.ec != std::errc{ } || parsed.ptr != end || !std::isfinite( result ) ) {
 				return std::nullopt;
 			}
 			return result;
@@ -103,7 +103,8 @@ namespace bhop {
 		     v.move_speed <= 0.0 || v.accelerate < 0.0 || v.air_accelerate < 0.0 ||
 		     v.stop_speed < 0.0 || v.jump_velocity <= 0.0 ||
 		     v.air_wish_speed_cap <= 0.0 || v.bunny_max_speed_factor <= 0.0 ||
-		     v.bunny_speed_reduction <= 0.0 || v.bunny_speed_reduction > 1.0 ) {
+		     v.bunny_speed_reduction <= 0.0 || v.bunny_speed_reduction > 1.0 ||
+		     v.ladder_speed <= 0.0 || v.ladder_jump_velocity <= 0.0 ) {
 			return "physics values are outside their supported range";
 		}
 		if ( config.duck_roll_window <= 0.0 ||
@@ -112,11 +113,11 @@ namespace bhop {
 		     config.duck_roll_height > 72.0 ) {
 			return "duck-roll window or height is outside its supported range";
 		}
-		return {};
+		return { };
 	}
 
 	auto load_config( const std::filesystem::path& path ) -> config_result_t {
-		config_result_t result{};
+		config_result_t result{ };
 		std::ifstream   input{ path };
 		if ( !input ) {
 			result.error = "could not open " + path.string( );
@@ -126,7 +127,7 @@ namespace bhop {
 		std::unordered_map< std::string, std::string > entries;
 		std::string                                    section;
 		std::string                                    line;
-		std::size_t                                    line_number{};
+		std::size_t                                    line_number{ };
 		while ( std::getline( input, line ) ) {
 			++line_number;
 			line = trim( std::move( line ) );
@@ -175,6 +176,8 @@ namespace bhop {
 		set_double( result.value.move.air_wish_speed_cap, entries, "movevars.airwishspeedcap", error );
 		set_double( result.value.move.bunny_max_speed_factor, entries, "movevars.bunnymaxspeedfactor", error );
 		set_double( result.value.move.bunny_speed_reduction, entries, "movevars.bunnyspeedreduction", error );
+		set_double( result.value.move.ladder_speed, entries, "movevars.ladderspeed", error );
+		set_double( result.value.move.ladder_jump_velocity, entries, "movevars.ladderjumpvelocity", error );
 
 		if ( !error.empty( ) ) {
 			result.error = std::move( error );

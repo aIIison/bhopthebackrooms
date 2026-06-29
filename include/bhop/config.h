@@ -13,13 +13,13 @@ namespace bhop {
 		bool        raw_mouse_input{ true };
 		double      duck_roll_window{ 0.4 };
 		double      duck_roll_height{ 18.0 };
-		move_vars_t move{};
+		move_vars_t move{ };
 	};
 
 	struct config_result_t {
-		config_t    value{};
-		bool        loaded{};
-		std::string error{};
+		config_t    value{ };
+		bool        loaded{ };
+		std::string error{ };
 	};
 
 	[[nodiscard]] auto load_config( const std::filesystem::path& path ) -> config_result_t;

@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -29,6 +30,7 @@
 namespace {
 	using RC::Unreal::FBoolProperty;
 	using RC::Unreal::FProperty;
+	using RC::Unreal::FRotator;
 	using RC::Unreal::FVector;
 	using RC::Unreal::UClass;
 	using RC::Unreal::UFunction;
@@ -38,14 +40,17 @@ namespace {
 	constexpr std::uint32_t expected_size_of_image           = 0x05233000;
 	constexpr std::uint8_t  movement_walking                 = 1;
 	constexpr std::uint8_t  movement_falling                 = 3;
+	constexpr std::uint8_t  movement_flying                  = 5;
 	constexpr double        gold_src_crouch_speed_multiplier = 1.0 / 3.0;
 	constexpr double        mouse_reference_fps              = 120.0;
 
 	using calc_velocity_fn_t = void ( * )( UObject*, float, float, bool, float );
+	using can_crouch_fn_t     = bool ( * )( UObject* );
 
 	class c_etb_bhop_mod;
-	c_etb_bhop_mod*    g_mod{};
-	calc_velocity_fn_t g_original_calc_velocity{};
+	c_etb_bhop_mod*    g_mod{ };
+	calc_velocity_fn_t g_original_calc_velocity{ };
+	can_crouch_fn_t     g_original_can_crouch{ };
 
 	enum class e_pointer_kind : std::uint8_t {
 		unknown,
@@ -54,17 +59,17 @@ namespace {
 	};
 
 	struct movement_properties_t {
-		FProperty*     character_owner{};
-		FProperty*     velocity{};
-		FProperty*     acceleration{};
-		FProperty*     max_acceleration{};
-		FProperty*     movement_mode{};
-		FProperty*     gravity_scale{};
-		FProperty*     jump_z_velocity{};
-		FProperty*     max_walk_speed{};
-		FProperty*     max_walk_speed_crouched{};
-		FProperty*     max_sprint_speed{};
-		FBoolProperty* wants_to_crouch{};
+		FProperty*     character_owner{ };
+		FProperty*     velocity{ };
+		FProperty*     acceleration{ };
+		FProperty*     max_acceleration{ };
+		FProperty*     movement_mode{ };
+		FProperty*     gravity_scale{ };
+		FProperty*     jump_z_velocity{ };
+		FProperty*     max_walk_speed{ };
+		FProperty*     max_walk_speed_crouched{ };
+		FProperty*     max_sprint_speed{ };
+		FBoolProperty* wants_to_crouch{ };
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
 			return character_owner && velocity && acceleration && max_acceleration &&
@@ -75,22 +80,23 @@ namespace {
 	};
 
 	struct character_properties_t {
-		FBoolProperty* pressed_jump{};
-		FProperty*     jump_key_hold_time{};
-		FBoolProperty* client_updating{};
-		FBoolProperty* was_jumping{};
-		FBoolProperty* can_move{};
-		FBoolProperty* is_dead{};
-		FBoolProperty* is_climbing{};
-		FBoolProperty* is_climbing_ladder{};
-		FBoolProperty* is_balancing{};
-		FBoolProperty* is_falling_balance{};
-		FBoolProperty* is_pushing{};
-		FBoolProperty* is_crouched{};
-		FBoolProperty* wants_to_crouch_after_landing{};
+		FBoolProperty* pressed_jump{ };
+		FProperty*     jump_key_hold_time{ };
+		FProperty*     controller{ };
+		FBoolProperty* client_updating{ };
+		FBoolProperty* was_jumping{ };
+		FBoolProperty* can_move{ };
+		FBoolProperty* is_dead{ };
+		FBoolProperty* is_climbing{ };
+		FBoolProperty* is_climbing_ladder{ };
+		FBoolProperty* is_balancing{ };
+		FBoolProperty* is_falling_balance{ };
+		FBoolProperty* is_pushing{ };
+		FBoolProperty* is_crouched{ };
+		FBoolProperty* wants_to_crouch_after_landing{ };
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
-			return pressed_jump && jump_key_hold_time && client_updating &&
+			return pressed_jump && jump_key_hold_time && controller && client_updating &&
 			    was_jumping && can_move && is_dead && is_climbing &&
 			    is_climbing_ladder && is_balancing && is_falling_balance &&
 			    is_pushing && is_crouched &&
@@ -99,20 +105,34 @@ namespace {
 	};
 
 	struct movement_state_t {
-		bool   overriding{};
-		bool   replaying{};
-		bool   has_crouch_state{};
-		bool   last_wants_crouch{};
-		double crouch_hold_seconds{};
-		float  gravity_scale{};
-		float  jump_z_velocity{};
-		float  max_walk_speed{};
-		float  max_walk_speed_crouched{};
-		float  max_sprint_speed{};
+		bool   overriding{ };
+		bool   replaying{ };
+		bool   has_crouch_state{ };
+		bool   last_wants_crouch{ };
+		double crouch_hold_seconds{ };
+		float  gravity_scale{ };
+		float  jump_z_velocity{ };
+		float  max_walk_speed{ };
+		float  max_walk_speed_crouched{ };
+		float  max_sprint_speed{ };
 	};
 
 	struct axis_input_params_t {
-		float axis_value{};
+		float axis_value{ };
+	};
+
+	struct ladder_overlap_params_t {
+		UObject* overlapped_component{ };
+		UObject* other_actor{ };
+	};
+
+	struct ladder_state_t {
+		UObject* ladder{ };
+		bhop::vec3_t start{ };
+		bhop::vec3_t end{ };
+		double half_width_cm{ };
+		double contact_depth_cm{ };
+		bool     on_floor{ };
 	};
 
 	template < typename T >
@@ -175,7 +195,7 @@ namespace {
 	}
 
 	[[nodiscard]] auto is_executable_game_address( const void* address ) noexcept -> bool {
-		MEMORY_BASIC_INFORMATION information{};
+		MEMORY_BASIC_INFORMATION information{ };
 		if ( !address ||
 		     VirtualQuery( address, &information, sizeof( information ) ) !=
 		         sizeof( information ) ) {
@@ -212,7 +232,7 @@ namespace {
 	// P_THIS->CalcVelocity(...). Track the context pointer through simple MOVs
 	// and accept a slot only when the wrapper contains exactly one indirect call
 	// through that context's vtable.
-	[[nodiscard]] auto resolve_calc_velocity_slot( UFunction* function )
+	[[nodiscard]] auto resolve_virtual_slot( UFunction* function, void** vtable = nullptr, bool log_failure = true )
 	    -> std::optional< std::size_t > {
 		if ( !function ) {
 			return std::nullopt;
@@ -224,7 +244,7 @@ namespace {
 			return std::nullopt;
 		}
 
-		ZydisDecoder decoder{};
+		ZydisDecoder decoder{ };
 		if ( !ZYAN_SUCCESS( ZydisDecoderInit(
 		         &decoder,
 		         ZYDIS_MACHINE_MODE_LONG_64,
@@ -232,14 +252,15 @@ namespace {
 			return std::nullopt;
 		}
 
-		std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{};
+		std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
 		kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
 		std::vector< std::size_t > candidates;
-		std::size_t                offset{};
+		std::vector< void* >       direct_targets;
+		std::size_t                offset{ };
 
 		while ( offset < 1024 ) {
-			ZydisDecodedInstruction instruction{};
-			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{};
+			ZydisDecodedInstruction instruction{ };
+			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
 			if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull(
 			         &decoder,
 			         code + offset,
@@ -261,6 +282,15 @@ namespace {
 					candidates.push_back(
 					    static_cast< std::size_t >( operand.mem.disp.value ) /
 					    sizeof( void* ) );
+				} else if ( operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && operand.imm.is_relative ) {
+					ZyanU64 absolute_address{ };
+					if ( ZYAN_SUCCESS( ZydisCalcAbsoluteAddress(
+					         &instruction,
+					         &operand,
+					         reinterpret_cast< ZyanU64 >( code + offset ),
+					         &absolute_address ) ) ) {
+						direct_targets.push_back( reinterpret_cast< void* >( absolute_address ) );
+					}
 				}
 				clear_volatile_pointer_kinds( kinds );
 			} else if ( instruction.mnemonic == ZYDIS_MNEMONIC_MOV &&
@@ -297,10 +327,200 @@ namespace {
 			}
 		}
 
+		if ( candidates.empty( ) && vtable ) {
+			for ( void* target : direct_targets ) {
+				for ( std::size_t slot = 0; slot < 384; ++slot ) {
+					if ( vtable[ slot ] == target ) {
+						candidates.push_back( slot );
+					}
+				}
+			}
+			std::sort( candidates.begin( ), candidates.end( ) );
+			candidates.erase( std::unique( candidates.begin( ), candidates.end( ) ), candidates.end( ) );
+		}
+
+		if ( candidates.size( ) != 1 ) {
+			if ( !log_failure ) {
+				return std::nullopt;
+			}
+			RC::Output::send< RC::LogLevel::Error >(
+			    STR( "[bhop] Refused virtual hook: exec wrapper yielded {} " )
+			        STR( "context-vtable call candidates.\n" ),
+			    candidates.size( ) );
+			return std::nullopt;
+		}
+		return candidates.front( );
+	}
+
+	[[nodiscard]] auto resolve_can_crouch_slot( void** vtable, std::int64_t movement_mode_offset, std::int64_t updated_component_offset ) -> std::optional< std::size_t > {
+		if ( !vtable || movement_mode_offset < 0 || updated_component_offset < 0 ) {
+			return std::nullopt;
+		}
+
+		ZydisDecoder decoder{ };
+		if ( !ZYAN_SUCCESS( ZydisDecoderInit( &decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64 ) ) ) {
+			return std::nullopt;
+		}
+
+		std::vector< std::size_t > falling_predicates;
+		for ( std::size_t slot = 0; slot < 384; ++slot ) {
+			auto* code = static_cast< const std::uint8_t* >( vtable[ slot ] );
+			if ( !is_executable_game_address( code ) ) {
+				continue;
+			}
+
+			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
+			kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
+			bool        reads_movement_mode{ };
+			bool        compares_falling{ };
+			bool        reached_return{ };
+			std::size_t offset{ };
+			while ( offset < 64 ) {
+				ZydisDecodedInstruction instruction{ };
+				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+				if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, code + offset, 64 - offset, &instruction, operands ) ) ) {
+					break;
+				}
+
+				for ( std::uint8_t index = 0; index < instruction.operand_count_visible; ++index ) {
+					const auto& operand = operands[ index ];
+					if ( operand.type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					     operand.mem.base <= ZYDIS_REGISTER_MAX_VALUE &&
+					     kinds[ operand.mem.base ] == e_pointer_kind::context_object &&
+					     operand.mem.disp.has_displacement &&
+					     operand.mem.disp.value == movement_mode_offset ) {
+						reads_movement_mode = true;
+					}
+					if ( instruction.mnemonic == ZYDIS_MNEMONIC_CMP && operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE ) {
+						compares_falling |= operand.imm.value.u == movement_falling;
+					}
+				}
+
+				if ( instruction.mnemonic == ZYDIS_MNEMONIC_MOV && operands[ 0 ].type == ZYDIS_OPERAND_TYPE_REGISTER ) {
+					const auto     destination = operands[ 0 ].reg.value;
+					e_pointer_kind new_kind    = e_pointer_kind::unknown;
+					if ( operands[ 1 ].type == ZYDIS_OPERAND_TYPE_REGISTER ) {
+						new_kind = kinds[ operands[ 1 ].reg.value ];
+					}
+					kinds[ destination ] = new_kind;
+				} else {
+					for ( std::uint8_t index = 0; index < instruction.operand_count_visible; ++index ) {
+						const auto& operand = operands[ index ];
+						if ( operand.type == ZYDIS_OPERAND_TYPE_REGISTER && operand.actions & ZYDIS_OPERAND_ACTION_MASK_WRITE ) {
+							kinds[ operand.reg.value ] = e_pointer_kind::unknown;
+						}
+					}
+				}
+
+				offset += instruction.length;
+				if ( instruction.mnemonic == ZYDIS_MNEMONIC_RET ) {
+					reached_return = true;
+					break;
+				}
+			}
+
+			if ( reached_return && reads_movement_mode && compares_falling ) {
+				falling_predicates.push_back( slot );
+			}
+		}
+
+		if ( falling_predicates.size( ) != 1 || falling_predicates.front( ) + 1 >= 384 ) {
+			RC::Output::send< RC::LogLevel::Error >(
+			    STR( "[bhop] Refused CanCrouch hook: IsFalling scan yielded {} candidates.\n" ),
+			    falling_predicates.size( ) );
+			return std::nullopt;
+		}
+		const auto falling_slot = falling_predicates.front( );
+		const auto ground_slot  = falling_slot + 1;
+
+		std::vector< std::size_t > candidates;
+		std::vector< void* >      visited;
+		for ( std::size_t slot = 0; slot < 384; ++slot ) {
+			auto* code = static_cast< const std::uint8_t* >( vtable[ slot ] );
+			if ( !is_executable_game_address( code ) || std::find( visited.begin( ), visited.end( ), vtable[ slot ] ) != visited.end( ) ) {
+				continue;
+			}
+			visited.push_back( vtable[ slot ] );
+
+			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
+			kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
+			bool        calls_falling{ };
+			bool        calls_ground{ };
+			bool        reads_updated_component{ };
+			bool        reached_return{ };
+			std::size_t offset{ };
+			while ( offset < 192 ) {
+				ZydisDecodedInstruction instruction{ };
+				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+				if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, code + offset, 192 - offset, &instruction, operands ) ) ) {
+					break;
+				}
+
+				for ( std::uint8_t index = 0; index < instruction.operand_count_visible; ++index ) {
+					const auto& operand = operands[ index ];
+					if ( operand.type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					     operand.mem.base <= ZYDIS_REGISTER_MAX_VALUE &&
+					     kinds[ operand.mem.base ] == e_pointer_kind::context_object &&
+					     operand.mem.disp.has_displacement &&
+					     operand.mem.disp.value == updated_component_offset ) {
+						reads_updated_component = true;
+					}
+				}
+
+				if ( instruction.mnemonic == ZYDIS_MNEMONIC_CALL ) {
+					const auto& operand = operands[ 0 ];
+					if ( operand.type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					     operand.mem.base <= ZYDIS_REGISTER_MAX_VALUE &&
+					     kinds[ operand.mem.base ] == e_pointer_kind::context_vtable &&
+					     operand.mem.disp.has_displacement ) {
+						const auto called_slot = static_cast< std::size_t >( operand.mem.disp.value ) / sizeof( void* );
+						calls_falling |= called_slot == falling_slot;
+						calls_ground |= called_slot == ground_slot;
+					} else if ( operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE && operand.imm.is_relative ) {
+						ZyanU64 target{ };
+						if ( ZYAN_SUCCESS( ZydisCalcAbsoluteAddress( &instruction, &operand, reinterpret_cast< ZyanU64 >( code + offset ), &target ) ) ) {
+							calls_falling |= reinterpret_cast< void* >( target ) == vtable[ falling_slot ];
+							calls_ground |= reinterpret_cast< void* >( target ) == vtable[ ground_slot ];
+						}
+					}
+					clear_volatile_pointer_kinds( kinds );
+				} else if ( instruction.mnemonic == ZYDIS_MNEMONIC_MOV && operands[ 0 ].type == ZYDIS_OPERAND_TYPE_REGISTER ) {
+					const auto     destination = operands[ 0 ].reg.value;
+					e_pointer_kind new_kind    = e_pointer_kind::unknown;
+					const auto&    source      = operands[ 1 ];
+					if ( source.type == ZYDIS_OPERAND_TYPE_REGISTER ) {
+						new_kind = kinds[ source.reg.value ];
+					} else if ( source.type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					            source.mem.base <= ZYDIS_REGISTER_MAX_VALUE &&
+					            kinds[ source.mem.base ] == e_pointer_kind::context_object &&
+					            source.mem.index == ZYDIS_REGISTER_NONE &&
+					            ( !source.mem.disp.has_displacement || source.mem.disp.value == 0 ) ) {
+						new_kind = e_pointer_kind::context_vtable;
+					}
+					kinds[ destination ] = new_kind;
+				} else {
+					for ( std::uint8_t index = 0; index < instruction.operand_count_visible; ++index ) {
+						const auto& operand = operands[ index ];
+						if ( operand.type == ZYDIS_OPERAND_TYPE_REGISTER && operand.actions & ZYDIS_OPERAND_ACTION_MASK_WRITE ) {
+							kinds[ operand.reg.value ] = e_pointer_kind::unknown;
+						}
+					}
+				}
+
+				offset += instruction.length;
+				if ( instruction.mnemonic == ZYDIS_MNEMONIC_RET ) {
+					reached_return = true;
+					break;
+				}
+			}
+			if ( reached_return && calls_falling && calls_ground && reads_updated_component ) {
+				candidates.push_back( slot );
+			}
+		}
+
 		if ( candidates.size( ) != 1 ) {
 			RC::Output::send< RC::LogLevel::Error >(
-			    STR( "[bhop] Refused CalcVelocity hook: exec wrapper yielded {} " )
-			        STR( "context-vtable call candidates.\n" ),
+			    STR( "[bhop] Refused CanCrouch hook: call-graph scan yielded {} candidates.\n" ),
 			    candidates.size( ) );
 			return std::nullopt;
 		}
@@ -313,6 +533,7 @@ namespace {
 	    float    friction,
 	    bool     fluid,
 	    float    braking_deceleration );
+	bool can_crouch_detour( UObject* movement );
 
 	class c_etb_bhop_mod final : public RC::CppUserModBase {
 	public:
@@ -367,9 +588,18 @@ namespace {
 				        STR( "InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ),
 				    mouse_hook_ids_[ 1 ] );
 			}
+			if ( !ladder_hook_ids_.empty( ) ) {
+				RC::Unreal::UObjectGlobals::UnregisterHook(
+				    ladder_overlap_function_,
+				    ladder_hook_ids_[ 0 ] );
+			}
 			if ( hook_target_ ) {
 				MH_DisableHook( hook_target_ );
 				MH_RemoveHook( hook_target_ );
+			}
+			if ( can_crouch_target_ ) {
+				MH_DisableHook( can_crouch_target_ );
+				MH_RemoveHook( can_crouch_target_ );
 			}
 			if ( minhook_initialized_ ) {
 				MH_Uninitialize( );
@@ -397,7 +627,7 @@ namespace {
 			apply_mouse_settings( );
 			register_commands( );
 			register_jump_hooks( );
-			RC::Unreal::Hook::FCallbackOptions options{};
+			RC::Unreal::Hook::FCallbackOptions options{ };
 			options.OwnerModName = STR( "bhop" );
 			options.HookName     = STR( "InstallCalcVelocity" );
 			install_tick_id_ =
@@ -460,6 +690,16 @@ namespace {
 				state.crouch_hold_seconds = 0.0;
 			}
 			state.replaying = replaying;
+
+			if ( const auto ladder = ladder_states_.find( owner ); ladder != ladder_states_.end( ) ) {
+				if ( config_.enabled ) {
+					restore_properties( movement, state );
+					handle_ladder_velocity( movement, owner, *mode, ladder->second );
+					return;
+				}
+				ladder_states_.erase( ladder );
+				set_movement_mode( movement, movement_falling );
+			}
 
 			const bool ordinary_mode =
 			    *mode == movement_walking || *mode == movement_falling;
@@ -525,8 +765,8 @@ namespace {
 			bool       vertical_velocity_overridden = false;
 			bool       crouched_jump_started        = false;
 			const bool wants_crouch                 = bool_value(
-			    movement,
-			    movement_properties_.wants_to_crouch );
+                movement,
+                movement_properties_.wants_to_crouch );
 			const bool released_quick_crouch =
 			    state.has_crouch_state &&
 			    state.last_wants_crouch &&
@@ -548,7 +788,7 @@ namespace {
 				const double lift =
 				    bhop::source_to_cm( config_.duck_roll_height );
 				target_location.SetZ( target_location.Z( ) + lift );
-				RC::Unreal::FHitResult sweep_result{};
+				RC::Unreal::FHitResult sweep_result{ };
 				actor->K2_SetActorLocation(
 				    target_location,
 				    true,
@@ -635,6 +875,14 @@ namespace {
 				crouch_held_[ owner ]            = false;
 				crouch_release_pending_[ owner ] = false;
 			}
+		}
+
+		[[nodiscard]] auto should_allow_ladder_crouch( UObject* movement ) const -> bool {
+			if ( !config_.enabled || !movement || !movement_properties_.character_owner ) {
+				return false;
+			}
+			auto** owner_storage = property_value< UObject* >( movement, movement_properties_.character_owner );
+			return owner_storage && *owner_storage && ladder_states_.contains( *owner_storage );
 		}
 
 	private:
@@ -747,6 +995,7 @@ namespace {
 				.pressed_jump = bool_property( owner, STR( "bPressedJump" ) ),
 				.jump_key_hold_time =
 				    owner->GetPropertyByNameInChain( STR( "JumpKeyHoldTime" ) ),
+				.controller      = owner->GetPropertyByNameInChain( STR( "Controller" ) ),
 				.client_updating = bool_property( owner, STR( "bClientUpdating" ) ),
 				.was_jumping     = bool_property( owner, STR( "bWasJumping" ) ),
 				.can_move        = bool_property( owner, STR( "CanMove" ) ),
@@ -774,13 +1023,230 @@ namespace {
 				return false;
 			}
 
-			std::array< std::uint8_t, 16 > parameters{};
+			std::array< std::uint8_t, 16 > parameters{ };
 			*set_movement_mode_property_
 			     ->ContainerPtrToValuePtr< std::uint8_t >( parameters.data( ) ) =
 			    mode;
 			movement->ProcessEvent(
 			    set_movement_mode_function_,
 			    parameters.data( ) );
+			return true;
+		}
+
+		[[nodiscard]] auto read_vector_return( UObject* object, UFunction*& function, FProperty*& return_property, const RC::Unreal::TCHAR* function_name ) -> std::optional< bhop::vec3_t > {
+			if ( !function ) {
+				function = object->GetFunctionByNameInChain( function_name );
+				if ( function ) {
+					return_property = function->GetPropertyByNameInChain( STR( "ReturnValue" ) );
+				}
+			}
+			if ( !function || !return_property ) {
+				return std::nullopt;
+			}
+
+			alignas( 16 ) std::array< std::uint8_t, 32 > parameters{ };
+			object->ProcessEvent( function, parameters.data( ) );
+			const auto* value = return_property->ContainerPtrToValuePtr< FVector >( parameters.data( ) );
+			if ( !value ) {
+				return std::nullopt;
+			}
+			return bhop::vec3_t{ value->X( ), value->Y( ), value->Z( ) };
+		}
+
+		[[nodiscard]] auto ladder_contains_player( const ladder_state_t& state, const bhop::vec3_t& player, const bhop::vec3_t& normal ) const -> bool {
+			const bhop::vec3_t segment{
+				state.end.x - state.start.x,
+				state.end.y - state.start.y,
+				state.end.z - state.start.z,
+			};
+			const double length = std::sqrt( segment.x * segment.x + segment.y * segment.y + segment.z * segment.z );
+			if ( length <= 1.0 ) {
+				return false;
+			}
+
+			const bhop::vec3_t axis{ segment.x / length, segment.y / length, segment.z / length };
+			bhop::vec3_t side{
+				axis.y * normal.z - axis.z * normal.y,
+				axis.z * normal.x - axis.x * normal.z,
+				axis.x * normal.y - axis.y * normal.x,
+			};
+			const double side_length = std::sqrt( side.x * side.x + side.y * side.y + side.z * side.z );
+			if ( side_length <= 1.0e-6 ) {
+				return false;
+			}
+			side.x /= side_length;
+			side.y /= side_length;
+			side.z /= side_length;
+
+			const bhop::vec3_t relative{
+				player.x - state.start.x,
+				player.y - state.start.y,
+				player.z - state.start.z,
+			};
+			const double along         = relative.x * axis.x + relative.y * axis.y + relative.z * axis.z;
+			const double from_plane    = relative.x * normal.x + relative.y * normal.y + relative.z * normal.z;
+			const double from_center   = relative.x * side.x + relative.y * side.y + relative.z * side.z;
+			const double axial_margin  = bhop::source_to_cm( 36.0 );
+			const double hull_radius   = bhop::source_to_cm( 16.0 );
+
+			return along >= -axial_margin &&
+			    along <= length + axial_margin &&
+			    std::abs( from_plane ) <= state.contact_depth_cm + hull_radius &&
+			    std::abs( from_center ) <= state.half_width_cm + hull_radius;
+		}
+
+		auto detach_from_ladder( UObject* movement, UObject* owner ) -> void {
+			ladder_states_.erase( owner );
+			set_movement_mode( movement, movement_falling );
+		}
+
+		[[nodiscard]] auto ladder_normal_for_player( UObject* ladder, UObject* owner ) const -> bhop::vec3_t {
+			auto*      ladder_actor    = static_cast< RC::Unreal::AActor* >( ladder );
+			auto*      player_actor    = static_cast< RC::Unreal::AActor* >( owner );
+			const auto ladder_location = ladder_actor->K2_GetActorLocation( );
+			const auto player_location = player_actor->K2_GetActorLocation( );
+			const auto ladder_rotation = ladder_actor->K2_GetActorRotation( );
+			const auto pitch           = ladder_rotation.GetPitch( ) * std::numbers::pi / 180.0;
+			const auto yaw             = ladder_rotation.GetYaw( ) * std::numbers::pi / 180.0;
+			bhop::vec3_t normal{
+				std::cos( pitch ) * std::cos( yaw ),
+				std::cos( pitch ) * std::sin( yaw ),
+				std::sin( pitch ),
+			};
+			const double player_side = normal.x * ( player_location.X( ) - ladder_location.X( ) ) +
+			    normal.y * ( player_location.Y( ) - ladder_location.Y( ) ) +
+			    normal.z * ( player_location.Z( ) - ladder_location.Z( ) );
+			if ( player_side < 0.0 ) {
+				normal.x = -normal.x;
+				normal.y = -normal.y;
+				normal.z = -normal.z;
+			}
+			return normal;
+		}
+
+		auto handle_ladder_velocity( UObject* movement, UObject* owner, std::uint8_t, ladder_state_t& state ) -> void {
+			auto* velocity         = property_value< FVector >( movement, movement_properties_.velocity );
+			auto* acceleration     = property_value< FVector >( movement, movement_properties_.acceleration );
+			auto* max_acceleration = property_value< float >( movement, movement_properties_.max_acceleration );
+			if ( !velocity || !acceleration || !max_acceleration ) {
+				detach_from_ladder( movement, owner );
+				return;
+			}
+
+			auto*        ladder_actor    = static_cast< RC::Unreal::AActor* >( state.ladder );
+			auto*        player_actor    = static_cast< RC::Unreal::AActor* >( owner );
+			const auto   player_location = player_actor->K2_GetActorLocation( );
+			const auto   ladder_normal  = ladder_normal_for_player( ladder_actor, player_actor );
+			const bhop::vec3_t player_position{ player_location.X( ), player_location.Y( ), player_location.Z( ) };
+			if ( !ladder_contains_player( state, player_position, ladder_normal ) ) {
+				detach_from_ladder( movement, owner );
+				return;
+			}
+
+			auto**             controller_storage = property_value< UObject* >( owner, character_properties_.controller );
+			UObject*           controller         = controller_storage ? *controller_storage : nullptr;
+			const auto*        control_rotation   = controller
+			             ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
+			             : nullptr;
+			const auto         view_rotation      = control_rotation ? *control_rotation : player_actor->K2_GetActorRotation( );
+			const double       view_pitch         = view_rotation.GetPitch( ) * std::numbers::pi / 180.0;
+			const double       view_yaw           = view_rotation.GetYaw( ) * std::numbers::pi / 180.0;
+			const bhop::vec3_t view_forward{
+				std::cos( view_pitch ) * std::cos( view_yaw ),
+				std::cos( view_pitch ) * std::sin( view_yaw ),
+				std::sin( view_pitch ),
+			};
+			const bhop::vec3_t view_right{ -std::sin( view_yaw ), std::cos( view_yaw ), 0.0 };
+
+			const double forward_acceleration = acceleration->X( ) * std::cos( view_yaw ) + acceleration->Y( ) * std::sin( view_yaw );
+			const double side_acceleration    = acceleration->X( ) * -std::sin( view_yaw ) + acceleration->Y( ) * std::cos( view_yaw );
+			const double input_threshold      = std::max( 1.0, static_cast< double >( *max_acceleration ) * 0.01 );
+			const double forward_move         = std::abs( forward_acceleration ) >= input_threshold ? std::copysign( 1.0, forward_acceleration ) : 0.0;
+			const double side_move            = std::abs( side_acceleration ) >= input_threshold ? std::copysign( 1.0, side_acceleration ) : 0.0;
+			const auto*  jump_key_hold_time   = property_value< float >( owner, character_properties_.jump_key_hold_time );
+			const bool   jump_queued          = jump_held_[ owner ] ||
+			    bool_value( owner, character_properties_.pressed_jump ) ||
+			    ( jump_key_hold_time && *jump_key_hold_time > 0.0F );
+
+			const auto result = bhop::calculate_ladder_velocity( {
+			                                                         .view_forward  = view_forward,
+			                                                         .view_right    = view_right,
+			                                                         .ladder_normal = ladder_normal,
+			                                                         .forward_move  = forward_move,
+			                                                         .side_move     = side_move,
+			                                                         .crouched      = bool_value( owner, character_properties_.is_crouched ) || bool_value( movement, movement_properties_.wants_to_crouch ),
+			                                                         .on_floor      = state.on_floor,
+			                                                         .jump_queued   = jump_queued,
+			                                                     },
+			                                                     config_.move );
+			velocity->SetX( result.velocity_cm.x );
+			velocity->SetY( result.velocity_cm.y );
+			velocity->SetZ( result.velocity_cm.z );
+			state.on_floor = false;
+
+			if ( result.detached ) {
+				detach_from_ladder( movement, owner );
+			}
+		}
+
+		[[nodiscard]] auto activate_ladder( UObject* ladder, UObject* owner, bool require_contact = false ) -> bool {
+			if ( !hook_ready_ || !config_.enabled || !owner || !owner->IsA( character_class_ ) ||
+			     !bool_value( owner, character_properties_.can_move, false ) ||
+			     bool_value( owner, character_properties_.is_dead ) ) {
+				return false;
+			}
+
+			auto**   movement_storage = owner->GetValuePtrByPropertyNameInChain< UObject* >( STR( "CharacterMovement" ) );
+			UObject* movement         = movement_storage ? *movement_storage : nullptr;
+			auto*    mode             = property_value< std::uint8_t >( movement, movement_properties_.movement_mode );
+			if ( !movement || !mode || ( *mode != movement_walking && *mode != movement_falling ) ) {
+				return false;
+			}
+
+			const auto start = read_vector_return( ladder, ladder_start_function_, ladder_start_return_property_, STR( "GetStartPoint" ) );
+			const auto end   = read_vector_return( ladder, ladder_end_function_, ladder_end_return_property_, STR( "GetHeightPoint" ) );
+			if ( !start || !end ) {
+				return false;
+			}
+
+			double half_width_cm     = bhop::source_to_cm( 32.0 );
+			double contact_depth_cm = bhop::source_to_cm( 16.0 );
+			auto** box_storage       = ladder->GetValuePtrByPropertyNameInChain< UObject* >( STR( "Box1" ) );
+			UObject* box             = box_storage ? *box_storage : nullptr;
+			if ( box ) {
+				if ( const auto extent = read_vector_return( box, box_extent_function_, box_extent_return_property_, STR( "GetScaledBoxExtent" ) ) ) {
+					half_width_cm = std::clamp(
+					    std::abs( extent->y ),
+					    bhop::source_to_cm( 24.0 ),
+					    bhop::source_to_cm( 64.0 ) );
+				}
+			}
+
+			ladder_state_t ladder_state{
+				.ladder           = ladder,
+				.start            = *start,
+				.end              = *end,
+				.half_width_cm    = half_width_cm,
+				.contact_depth_cm = contact_depth_cm,
+				.on_floor         = *mode == movement_walking,
+			};
+			if ( require_contact ) {
+				auto*      player_actor    = static_cast< RC::Unreal::AActor* >( owner );
+				const auto player_location = player_actor->K2_GetActorLocation( );
+				const bhop::vec3_t player_position{ player_location.X( ), player_location.Y( ), player_location.Z( ) };
+				const auto normal = ladder_normal_for_player( ladder, owner );
+				if ( !ladder_contains_player( ladder_state, player_position, normal ) ) {
+					return false;
+				}
+			}
+
+			auto& movement_state = states_[ movement ];
+			restore_properties( movement, movement_state );
+			ladder_states_[ owner ] = ladder_state;
+			if ( !set_movement_mode( movement, movement_flying ) ) {
+				ladder_states_.erase( owner );
+				return false;
+			}
 			return true;
 		}
 
@@ -809,7 +1275,8 @@ namespace {
 					    movement_properties_.movement_mode );
 					if ( movement && mode &&
 					     ( *mode == movement_walking ||
-					       *mode == movement_falling ) &&
+					       *mode == movement_falling ||
+					       ( *mode == movement_flying && ladder_states_.contains( character ) ) ) &&
 					     bool_value(
 					         character,
 					         character_properties_.can_move,
@@ -820,6 +1287,26 @@ namespace {
 						        crouch->second );
 						character_properties_.wants_to_crouch_after_landing
 						    ->SetPropertyValueInContainer( character, false );
+					}
+				}
+			}
+
+			if ( hook_ready_ ) {
+				std::vector< UObject* > ladders;
+				RC::Unreal::UObjectGlobals::FindAllOf( STR( "BP_Pool_Ladder_C" ), ladders );
+				if ( !ladders.empty( ) ) {
+					if ( ladder_hook_ids_.empty( ) ) {
+						register_ladder_hook( ladders.front( ) );
+					}
+					for ( UObject* character : characters ) {
+						if ( ladder_states_.contains( character ) ) {
+							continue;
+						}
+						for ( UObject* ladder : ladders ) {
+							if ( activate_ladder( ladder, character, true ) ) {
+								break;
+							}
+						}
 					}
 				}
 			}
@@ -877,7 +1364,7 @@ namespace {
 			        nullptr,
 			        nullptr,
 			        STR( "/Script/Engine.CharacterMovementComponent:CalcVelocity" ) );
-			const auto slot = resolve_calc_velocity_slot( wrapper );
+			const auto slot = resolve_virtual_slot( wrapper );
 			if ( !slot ) {
 				RC::Output::send< RC::LogLevel::Error >(
 				    STR( "[bhop] Native hook disabled: CalcVelocity virtual slot " )
@@ -898,6 +1385,26 @@ namespace {
 				return;
 			}
 
+			FProperty* updated_component_property = movement->GetPropertyByNameInChain( STR( "UpdatedComponent" ) );
+			const auto can_crouch_slot = updated_component_property
+			           ? resolve_can_crouch_slot(
+			                 *object_as_vtable,
+			                 movement_properties_.movement_mode->GetOffset_Internal( ),
+			                 updated_component_property->GetOffset_Internal( ) )
+			           : std::nullopt;
+			if ( !can_crouch_slot ) {
+				RC::Output::send< RC::LogLevel::Error >(
+				    STR( "[bhop] Native hook disabled: CanCrouchInCurrentState could not be validated.\n" ) );
+				return;
+			}
+			void* can_crouch_target = ( *object_as_vtable )[ *can_crouch_slot ];
+			if ( !is_executable_game_address( can_crouch_target ) || can_crouch_target == target ) {
+				RC::Output::send< RC::LogLevel::Error >(
+				    STR( "[bhop] Native hook disabled: CanCrouchInCurrentState slot {} did not validate.\n" ),
+				    *can_crouch_slot );
+				return;
+			}
+
 			if ( MH_Initialize( ) != MH_OK ) {
 				RC::Output::send< RC::LogLevel::Error >(
 				    STR( "[bhop] Native hook disabled: MinHook initialization " )
@@ -905,23 +1412,23 @@ namespace {
 				return;
 			}
 			minhook_initialized_ = true;
-			if ( MH_CreateHook(
-			         target,
-			         reinterpret_cast< void* >( &calc_velocity_detour ),
-			         reinterpret_cast< void** >( &g_original_calc_velocity ) ) != MH_OK ||
-			     MH_EnableHook( target ) != MH_OK ) {
+			if ( MH_CreateHook( target, reinterpret_cast< void* >( &calc_velocity_detour ), reinterpret_cast< void** >( &g_original_calc_velocity ) ) != MH_OK ||
+			     MH_CreateHook( can_crouch_target, reinterpret_cast< void* >( &can_crouch_detour ), reinterpret_cast< void** >( &g_original_can_crouch ) ) != MH_OK ||
+			     MH_EnableHook( target ) != MH_OK ||
+			     MH_EnableHook( can_crouch_target ) != MH_OK ) {
 				RC::Output::send< RC::LogLevel::Error >(
-				    STR( "[bhop] Native hook disabled: CalcVelocity detour could " )
+				    STR( "[bhop] Native hook disabled: movement detours could " )
 				        STR( "not be installed.\n" ) );
 				return;
 			}
 
-			hook_target_ = target;
-			hook_ready_  = true;
+			hook_target_       = target;
+			can_crouch_target_ = can_crouch_target;
+			hook_ready_        = true;
 			RC::Output::send< RC::LogLevel::Normal >(
-			    STR( "[bhop] Native CalcVelocity hook active (slot {}, target {}).\n" ),
+			    STR( "[bhop] Native movement hooks active (CalcVelocity slot {}, CanCrouch slot {}).\n" ),
 			    *slot,
-			    target );
+			    *can_crouch_slot );
 		}
 
 		auto apply_properties( UObject* movement, movement_state_t& state ) -> void {
@@ -1014,13 +1521,13 @@ namespace {
 			    RC::Unreal::UObjectGlobals::RegisterHook(
 			        STR( "/Script/Engine.Character:Jump" ),
 			        press,
-			        {},
+			        { },
 			        nullptr ) );
 			jump_hook_ids_.push_back(
 			    RC::Unreal::UObjectGlobals::RegisterHook(
 			        STR( "/Script/Engine.Character:StopJumping" ),
 			        release,
-			        {},
+			        { },
 			        nullptr ) );
 		}
 
@@ -1040,6 +1547,9 @@ namespace {
 				if ( event_id == *crouch_press_event_ ) {
 					crouch_held_[ context.Context ]            = true;
 					crouch_release_pending_[ context.Context ] = false;
+				} else if ( ladder_states_.contains( context.Context ) ) {
+					crouch_held_[ context.Context ]            = false;
+					crouch_release_pending_[ context.Context ] = false;
 				} else {
 					// Preserve +duck for one predicted move so short taps are
 					// represented in compressed client moves.
@@ -1055,6 +1565,25 @@ namespace {
 			const auto no_op    = []( RC::Unreal::UnrealScriptFunctionCallableContext&, void* ) {};
 			mouse_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_Turn_K2Node_InputAxisEvent_157" ), callback, no_op, nullptr ) );
 			mouse_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ), callback, no_op, nullptr ) );
+		}
+
+		auto register_ladder_hook( UObject* ladder ) -> void {
+			ladder_overlap_function_ = ladder->GetFunctionByNameInChain( STR( "BndEvt__BP_Ladder_Box1_K2Node_ComponentBoundEvent_2_ComponentBeginOverlapSignature__DelegateSignature" ) );
+			if ( !ladder_overlap_function_ ) {
+				return;
+			}
+			const auto callback = [ this ]( RC::Unreal::UnrealScriptFunctionCallableContext& context, void* ) {
+				auto& parameters = context.GetParams< ladder_overlap_params_t >( );
+				const bool already_attached = parameters.other_actor && ladder_states_.contains( parameters.other_actor );
+				if ( already_attached || activate_ladder( context.Context, parameters.other_actor ) ) {
+					// Make the Blueprint cast fail so ETB never starts its
+					// snap-to-ladder timeline or scripted transition.
+					parameters.other_actor = nullptr;
+				}
+			};
+			const auto no_op = []( RC::Unreal::UnrealScriptFunctionCallableContext&, void* ) {};
+			ladder_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( ladder_overlap_function_, callback, no_op, nullptr ) );
+			Output::send< LogLevel::Default >( STR( "[bhop] GoldSrc ladder hook active.\n" ) );
 		}
 
 		auto correct_mouse_input( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void {
@@ -1077,7 +1606,7 @@ namespace {
 		}
 
 		auto register_commands( ) -> void {
-			RC::Unreal::Hook::FCallbackOptions options{};
+			RC::Unreal::Hook::FCallbackOptions options{ };
 			options.OwnerModName = STR( "bhop" );
 			options.HookName     = STR( "ConsoleCommands" );
 
@@ -1114,33 +1643,43 @@ namespace {
 		}
 
 	private:
-		bhop::config_t                                   config_{};
-		std::filesystem::path                            config_path_{};
-		movement_properties_t                            movement_properties_{};
-		character_properties_t                           character_properties_{};
-		UClass*                                          character_class_{};
-		UFunction*                                       set_movement_mode_function_{};
-		FProperty*                                       set_movement_mode_property_{};
-		FProperty*                                       mouse_delta_seconds_property_{};
-		UObject*                                         input_settings_{};
-		FBoolProperty*                                   mouse_smoothing_property_{};
-		UFunction*                                       clear_mouse_smoothing_function_{};
-		std::unordered_map< UObject*, movement_state_t > states_{};
-		std::unordered_map< UObject*, bool >             jump_held_{};
-		std::unordered_map< UObject*, bool >             crouch_held_{};
-		std::unordered_map< UObject*, bool >             crouch_release_pending_{};
-		std::optional< int >                             crouch_press_event_{};
-		std::vector< std::pair< int, int > >             jump_hook_ids_{};
-		std::vector< std::pair< int, int > >             crouch_hook_ids_{};
-		std::vector< std::pair< int, int > >             mouse_hook_ids_{};
-		RC::Unreal::Hook::GlobalCallbackId               install_tick_id_{};
-		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{};
-		void*                                            hook_target_{};
-		bool                                             install_attempted_{};
-		bool                                             hook_ready_{};
-		bool                                             minhook_initialized_{};
-		bool                                             original_mouse_smoothing_{};
-		bool                                             has_original_mouse_smoothing_{};
+		bhop::config_t                                   config_{ };
+		std::filesystem::path                            config_path_{ };
+		movement_properties_t                            movement_properties_{ };
+		character_properties_t                           character_properties_{ };
+		UClass*                                          character_class_{ };
+		UFunction*                                       set_movement_mode_function_{ };
+		FProperty*                                       set_movement_mode_property_{ };
+		FProperty*                                       mouse_delta_seconds_property_{ };
+		UFunction*                                       ladder_start_function_{ };
+		FProperty*                                       ladder_start_return_property_{ };
+		UFunction*                                       ladder_end_function_{ };
+		FProperty*                                       ladder_end_return_property_{ };
+		UFunction*                                       box_extent_function_{ };
+		FProperty*                                       box_extent_return_property_{ };
+		UObject*                                         input_settings_{ };
+		FBoolProperty*                                   mouse_smoothing_property_{ };
+		UFunction*                                       clear_mouse_smoothing_function_{ };
+		UFunction*                                       ladder_overlap_function_{ };
+		std::unordered_map< UObject*, movement_state_t > states_{ };
+		std::unordered_map< UObject*, ladder_state_t >   ladder_states_{ };
+		std::unordered_map< UObject*, bool >             jump_held_{ };
+		std::unordered_map< UObject*, bool >             crouch_held_{ };
+		std::unordered_map< UObject*, bool >             crouch_release_pending_{ };
+		std::optional< int >                             crouch_press_event_{ };
+		std::vector< std::pair< int, int > >             jump_hook_ids_{ };
+		std::vector< std::pair< int, int > >             crouch_hook_ids_{ };
+		std::vector< std::pair< int, int > >             mouse_hook_ids_{ };
+		std::vector< std::pair< int, int > >             ladder_hook_ids_{ };
+		RC::Unreal::Hook::GlobalCallbackId               install_tick_id_{ };
+		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{ };
+		void*                                            hook_target_{ };
+		void*                                            can_crouch_target_{ };
+		bool                                             install_attempted_{ };
+		bool                                             hook_ready_{ };
+		bool                                             minhook_initialized_{ };
+		bool                                             original_mouse_smoothing_{ };
+		bool                                             has_original_mouse_smoothing_{ };
 		double                                           frame_delta_seconds_{ 1.0 / 60.0 };
 	};
 
@@ -1165,6 +1704,13 @@ namespace {
 			    fluid,
 			    braking_deceleration );
 		}
+	}
+
+	bool can_crouch_detour( UObject* movement ) {
+		if ( g_mod && g_mod->should_allow_ladder_crouch( movement ) ) {
+			return true;
+		}
+		return g_original_can_crouch && g_original_can_crouch( movement );
 	}
 }  // namespace
 

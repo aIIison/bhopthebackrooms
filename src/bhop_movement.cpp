@@ -78,6 +78,29 @@ namespace bhop {
 			velocity.y *= scale;
 			return velocity;
 		}
+
+		[[nodiscard]] auto dot( const vec3_t& left, const vec3_t& right ) noexcept -> double {
+			return left.x * right.x + left.y * right.y + left.z * right.z;
+		}
+
+		[[nodiscard]] auto cross( const vec3_t& left, const vec3_t& right ) noexcept -> vec3_t {
+			return {
+				left.y * right.z - left.z * right.y,
+				left.z * right.x - left.x * right.z,
+				left.x * right.y - left.y * right.x,
+			};
+		}
+
+		[[nodiscard]] auto normalized( vec3_t value ) noexcept -> vec3_t {
+			const double length = std::sqrt( dot( value, value ) );
+			if ( length <= epsilon ) {
+				return { };
+			}
+			value.x /= length;
+			value.y /= length;
+			value.z /= length;
+			return value;
+		}
 	}  // namespace
 
 	auto vec3_t::horizontal_length( ) const noexcept -> double {
@@ -152,20 +175,72 @@ namespace bhop {
 		return velocity_cm;
 	}
 
+	auto calculate_ladder_velocity( const ladder_input_t& input, const move_vars_t& vars ) noexcept -> ladder_result_t {
+		const vec3_t normal = normalized( input.ladder_normal );
+		if ( dot( normal, normal ) <= epsilon ) {
+			return { };
+		}
+
+		if ( input.jump_queued ) {
+			const double jump_speed = source_to_cm( vars.ladder_jump_velocity );
+			return {
+				.velocity_cm = { normal.x * jump_speed, normal.y * jump_speed, normal.z * jump_speed },
+				.detached    = true,
+			};
+		}
+
+		double speed = std::min( vars.ladder_speed, vars.max_speed );
+		if ( input.crouched ) {
+			speed *= 1.0 / 3.0;
+		}
+
+		const double forward = std::clamp( input.forward_move, -1.0, 1.0 ) * speed;
+		const double side    = std::clamp( input.side_move, -1.0, 1.0 ) * speed;
+		const vec3_t wish{
+			input.view_forward.x * forward + input.view_right.x * side,
+			input.view_forward.y * forward + input.view_right.y * side,
+			input.view_forward.z * forward + input.view_right.z * side,
+		};
+
+		const double normal_speed = dot( wish, normal );
+		const vec3_t into_ladder{ normal.x * normal_speed, normal.y * normal_speed, normal.z * normal_speed };
+		const vec3_t lateral{ wish.x - into_ladder.x, wish.y - into_ladder.y, wish.z - into_ladder.z };
+		const vec3_t ladder_side = normalized( cross( { 0.0, 0.0, 1.0 }, normal ) );
+		const vec3_t ladder_up   = cross( normal, ladder_side );
+		vec3_t       velocity{
+            lateral.x - ladder_up.x * normal_speed,
+            lateral.y - ladder_up.y * normal_speed,
+            lateral.z - ladder_up.z * normal_speed,
+		};
+
+		if ( input.on_floor && normal_speed > 0.0 ) {
+			velocity.x += normal.x * vars.ladder_speed;
+			velocity.y += normal.y * vars.ladder_speed;
+			velocity.z += normal.z * vars.ladder_speed;
+		}
+
+		velocity.x = source_to_cm( velocity.x );
+		velocity.y = source_to_cm( velocity.y );
+		velocity.z = source_to_cm( velocity.z );
+		return { .velocity_cm = velocity };
+	}
+
 	auto physics_checksum( const move_vars_t& vars ) -> std::uint64_t {
 		std::uint64_t hash = 14695981039346656037ULL;
 		const double  values[]{
-			vars.gravity,
-			vars.friction,
-			vars.max_speed,
-			vars.move_speed,
-			vars.accelerate,
-			vars.air_accelerate,
-			vars.stop_speed,
-			vars.jump_velocity,
-			vars.air_wish_speed_cap,
-			vars.bunny_max_speed_factor,
-			vars.bunny_speed_reduction,
+            vars.gravity,
+            vars.friction,
+            vars.max_speed,
+            vars.move_speed,
+            vars.accelerate,
+            vars.air_accelerate,
+            vars.stop_speed,
+            vars.jump_velocity,
+            vars.air_wish_speed_cap,
+            vars.bunny_max_speed_factor,
+            vars.bunny_speed_reduction,
+            vars.ladder_speed,
+            vars.ladder_jump_velocity,
 		};
 		for ( const double value : values ) {
 			fnv_mix( hash, std::bit_cast< std::uint64_t >( value ) );

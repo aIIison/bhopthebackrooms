@@ -8,7 +8,7 @@
 #include <string>
 
 namespace {
-	int failures{};
+	int failures{ };
 
 	auto check( bool condition, const std::string& name ) -> void {
 		if ( !condition ) {
@@ -36,7 +36,7 @@ int main( ) {
 	        320.0 ),
 	    "Unreal-to-Source conversion" );
 
-	move_vars_t            vars{};
+	move_vars_t            vars{ };
 	const movement_input_t full_forward{
 		.acceleration_cm           = { 2048.0, 0.0, 0.0 },
 		.max_input_acceleration_cm = 2048.0,
@@ -44,7 +44,7 @@ int main( ) {
 		.grounded                  = true,
 		.jump_queued               = true,
 	};
-	const vec3_t first_ground = calculate_velocity( {}, full_forward, vars );
+	const vec3_t first_ground = calculate_velocity( { }, full_forward, vars );
 	check( near( cm_to_source( first_ground.x ), 12.5 ), "GoldSrc ground acceleration" );
 	check( near( first_ground.y, 0.0 ), "Ground acceleration direction" );
 
@@ -55,7 +55,7 @@ int main( ) {
 		.grounded                  = true,
 		.jump_queued               = true,
 	};
-	const vec3_t diagonal_velocity = calculate_velocity( {}, diagonal, vars );
+	const vec3_t diagonal_velocity = calculate_velocity( { }, diagonal, vars );
 	check(
 	    near( cm_to_source( diagonal_velocity.horizontal_length( ) ), 12.5 ),
 	    "Diagonal input normalization" );
@@ -74,7 +74,7 @@ int main( ) {
 	    "GoldSrc air acceleration uses uncapped wishspeed" );
 
 	const movement_input_t friction_only{
-		.acceleration_cm           = {},
+		.acceleration_cm           = { },
 		.max_input_acceleration_cm = 2048.0,
 		.delta_seconds             = 0.01,
 		.grounded                  = true,
@@ -105,6 +105,39 @@ int main( ) {
 	    near( cm_to_source( capped.horizontal_length( ) ), 1.7 * 320.0 * 0.65 ),
 	    "Mega-bunny speed cap" );
 	check( near( capped.z, uncapped.z ), "Mega-bunny cap preserves vertical velocity" );
+
+	const ladder_input_t climb_input{
+		.view_forward  = { -1.0, 0.0, 0.0 },
+		.view_right    = { 0.0, 1.0, 0.0 },
+		.ladder_normal = { 1.0, 0.0, 0.0 },
+		.forward_move  = 1.0,
+	};
+	const auto climb = calculate_ladder_velocity( climb_input, vars );
+	check( near( cm_to_source( climb.velocity_cm.z ), 200.0 ), "GoldSrc ladder climb speed" );
+	check( near( climb.velocity_cm.x, 0.0 ), "Ladder climb stays in ladder plane" );
+
+	auto strafe_input         = climb_input;
+	strafe_input.forward_move = 0.0;
+	strafe_input.side_move    = 1.0;
+	const auto strafe         = calculate_ladder_velocity( strafe_input, vars );
+	check( near( cm_to_source( strafe.velocity_cm.y ), 200.0 ), "GoldSrc ladder strafing" );
+
+	auto crouch_climb          = climb_input;
+	crouch_climb.crouched      = true;
+	const auto crouched_ladder = calculate_ladder_velocity( crouch_climb, vars );
+	check( near( cm_to_source( crouched_ladder.velocity_cm.z ), 200.0 / 3.0 ), "Crouched ladder speed" );
+
+	auto floor_climb         = crouch_climb;
+	floor_climb.view_forward = { 1.0, 0.0, 0.0 };
+	floor_climb.on_floor     = true;
+	const auto floor_push    = calculate_ladder_velocity( floor_climb, vars );
+	check( near( cm_to_source( floor_push.velocity_cm.x ), 200.0 ), "GoldSrc ladder floor push is not crouch-scaled" );
+
+	auto jump_off          = climb_input;
+	jump_off.jump_queued   = true;
+	const auto ladder_jump = calculate_ladder_velocity( jump_off, vars );
+	check( ladder_jump.detached, "Ladder jump detaches" );
+	check( near( cm_to_source( ladder_jump.velocity_cm.x ), 270.0 ), "GoldSrc ladder jump-off speed" );
 
 	const auto temp = std::filesystem::temp_directory_path( ) / "etb_bhop_test.ini";
 	{

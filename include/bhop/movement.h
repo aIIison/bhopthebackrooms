@@ -7,9 +7,9 @@ namespace bhop {
 	inline constexpr double centimeters_per_source_unit = 1.5;
 
 	struct vec3_t {
-		double x{};
-		double y{};
-		double z{};
+		double x{ };
+		double y{ };
+		double z{ };
 
 		[[nodiscard]] auto horizontal_length( ) const noexcept -> double;
 	};
@@ -26,14 +26,32 @@ namespace bhop {
 		double air_wish_speed_cap{ 30.0 };
 		double bunny_max_speed_factor{ 1.7 };
 		double bunny_speed_reduction{ 0.65 };
+		double ladder_speed{ 200.0 };
+		double ladder_jump_velocity{ 270.0 };
 	};
 
 	struct movement_input_t {
-		vec3_t acceleration_cm{};
+		vec3_t acceleration_cm{ };
 		double max_input_acceleration_cm{ 1.0 };
-		double delta_seconds{};
-		bool   grounded{};
-		bool   jump_queued{};
+		double delta_seconds{ };
+		bool   grounded{ };
+		bool   jump_queued{ };
+	};
+
+	struct ladder_input_t {
+		vec3_t view_forward{ };
+		vec3_t view_right{ };
+		vec3_t ladder_normal{ };
+		double forward_move{ };
+		double side_move{ };
+		bool   crouched{ };
+		bool   on_floor{ };
+		bool   jump_queued{ };
+	};
+
+	struct ladder_result_t {
+		vec3_t velocity_cm{ };
+		bool   detached{ };
 	};
 
 	[[nodiscard]] auto source_to_cm( double source_units ) noexcept -> double;
@@ -49,6 +67,8 @@ namespace bhop {
 	[[nodiscard]] auto apply_mega_bunny_cap(
 	    vec3_t             velocity_cm,
 	    const move_vars_t& vars ) noexcept -> vec3_t;
+
+	[[nodiscard]] auto calculate_ladder_velocity( const ladder_input_t& input, const move_vars_t& vars ) noexcept -> ladder_result_t;
 
 	[[nodiscard]] auto physics_checksum( const move_vars_t& vars ) -> std::uint64_t;
 	[[nodiscard]] auto checksum_hex( std::uint64_t checksum ) -> std::string;
