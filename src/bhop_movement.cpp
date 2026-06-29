@@ -225,6 +225,69 @@ namespace bhop {
 		return { .velocity_cm = velocity };
 	}
 
+	auto calculate_water_velocity( vec3_t velocity_cm, const water_input_t& input, const move_vars_t& vars ) noexcept -> vec3_t {
+		const double dt = std::max( 0.0, input.delta_seconds );
+		if ( dt <= 0.0 ) {
+			return velocity_cm;
+		}
+
+		if ( input.swim_up ) {
+			velocity_cm.z = source_to_cm( vars.water_swim_up_speed );
+		}
+
+		const double forward = std::clamp( input.forward_move, -1.0, 1.0 ) * vars.move_speed;
+		const double side    = std::clamp( input.side_move, -1.0, 1.0 ) * vars.move_speed;
+		const double up      = std::clamp( input.up_move, -1.0, 1.0 ) * vars.move_speed;
+		vec3_t wish_velocity{
+			input.view_forward.x * forward + input.view_right.x * side,
+			input.view_forward.y * forward + input.view_right.y * side,
+			input.view_forward.z * forward + input.view_right.z * side,
+		};
+		if ( forward == 0.0 && side == 0.0 && up == 0.0 ) {
+			wish_velocity.z -= vars.water_sink_speed;
+		} else {
+			wish_velocity.z += up;
+		}
+
+		double wish_speed = std::sqrt( dot( wish_velocity, wish_velocity ) );
+		if ( wish_speed > vars.max_speed ) {
+			const double scale = vars.max_speed / wish_speed;
+			wish_velocity.x *= scale;
+			wish_velocity.y *= scale;
+			wish_velocity.z *= scale;
+			wish_speed = vars.max_speed;
+		}
+		wish_speed *= vars.water_speed_factor;
+
+		const double speed = std::sqrt( dot( velocity_cm, velocity_cm ) );
+		double       new_speed = speed;
+		if ( speed > epsilon ) {
+			new_speed = std::max( 0.0, speed - dt * speed * vars.friction );
+			const double scale = new_speed / speed;
+			velocity_cm.x *= scale;
+			velocity_cm.y *= scale;
+			velocity_cm.z *= scale;
+		}
+
+		if ( wish_speed < 0.1 ) {
+			return velocity_cm;
+		}
+
+		const double add_speed = source_to_cm( wish_speed ) - new_speed;
+		if ( add_speed <= 0.0 ) {
+			return velocity_cm;
+		}
+
+		const vec3_t wish_direction = normalized( wish_velocity );
+		const double acceleration_speed = std::min(
+		    vars.accelerate * source_to_cm( wish_speed ) * dt,
+		    add_speed );
+		velocity_cm.x += acceleration_speed * wish_direction.x;
+		velocity_cm.y += acceleration_speed * wish_direction.y;
+		velocity_cm.z += acceleration_speed * wish_direction.z;
+		return velocity_cm;
+	}
+
 	auto physics_checksum( const move_vars_t& vars ) -> std::uint64_t {
 		std::uint64_t hash = 14695981039346656037ULL;
 		const double  values[]{
@@ -241,6 +304,9 @@ namespace bhop {
             vars.bunny_speed_reduction,
             vars.ladder_speed,
             vars.ladder_jump_velocity,
+            vars.water_speed_factor,
+            vars.water_sink_speed,
+            vars.water_swim_up_speed,
 		};
 		for ( const double value : values ) {
 			fnv_mix( hash, std::bit_cast< std::uint64_t >( value ) );

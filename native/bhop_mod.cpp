@@ -40,6 +40,7 @@ namespace {
 	constexpr std::uint32_t expected_size_of_image           = 0x05233000;
 	constexpr std::uint8_t  movement_walking                 = 1;
 	constexpr std::uint8_t  movement_falling                 = 3;
+	constexpr std::uint8_t  movement_swimming                = 4;
 	constexpr std::uint8_t  movement_flying                  = 5;
 	constexpr double        gold_src_crouch_speed_multiplier = 1.0 / 3.0;
 	constexpr double        mouse_reference_fps              = 120.0;
@@ -69,13 +70,14 @@ namespace {
 		FProperty*     max_walk_speed{ };
 		FProperty*     max_walk_speed_crouched{ };
 		FProperty*     max_sprint_speed{ };
+		FProperty*     max_swim_speed{ };
 		FBoolProperty* wants_to_crouch{ };
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
 			return character_owner && velocity && acceleration && max_acceleration &&
 			    movement_mode && gravity_scale && jump_z_velocity &&
 			    max_walk_speed && max_walk_speed_crouched && max_sprint_speed &&
-			    wants_to_crouch;
+			    max_swim_speed && wants_to_crouch;
 		}
 	};
 
@@ -93,13 +95,14 @@ namespace {
 		FBoolProperty* is_falling_balance{ };
 		FBoolProperty* is_pushing{ };
 		FBoolProperty* is_crouched{ };
+		FBoolProperty* has_water_physics{ };
 		FBoolProperty* wants_to_crouch_after_landing{ };
 
 		[[nodiscard]] auto complete( ) const noexcept -> bool {
 			return pressed_jump && jump_key_hold_time && controller && client_updating &&
 			    was_jumping && can_move && is_dead && is_climbing &&
 			    is_climbing_ladder && is_balancing && is_falling_balance &&
-			    is_pushing && is_crouched &&
+			    is_pushing && is_crouched && has_water_physics &&
 			    wants_to_crouch_after_landing;
 		}
 	};
@@ -115,6 +118,7 @@ namespace {
 		float  max_walk_speed{ };
 		float  max_walk_speed_crouched{ };
 		float  max_sprint_speed{ };
+		float  max_swim_speed{ };
 	};
 
 	struct axis_input_params_t {
@@ -588,6 +592,16 @@ namespace {
 				        STR( "InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ),
 				    mouse_hook_ids_[ 1 ] );
 			}
+			if ( !movement_input_hook_ids_.empty( ) ) {
+				RC::Unreal::UObjectGlobals::UnregisterHook(
+				    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_MoveForward_K2Node_InputAxisEvent_181" ),
+				    movement_input_hook_ids_[ 0 ] );
+			}
+			if ( movement_input_hook_ids_.size( ) > 1 ) {
+				RC::Unreal::UObjectGlobals::UnregisterHook(
+				    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_MoveRight_K2Node_InputAxisEvent_192" ),
+				    movement_input_hook_ids_[ 1 ] );
+			}
 			if ( !ladder_hook_ids_.empty( ) ) {
 				RC::Unreal::UObjectGlobals::UnregisterHook(
 				    ladder_overlap_function_,
@@ -701,10 +715,7 @@ namespace {
 				set_movement_mode( movement, movement_falling );
 			}
 
-			const bool ordinary_mode =
-			    *mode == movement_walking || *mode == movement_falling;
-			const bool special =
-			    fluid || !ordinary_mode ||
+			const bool blocked =
 			    !bool_value( owner, character_properties_.can_move, false ) ||
 			    bool_value( owner, character_properties_.is_dead ) ||
 			    bool_value( owner, character_properties_.is_climbing ) ||
@@ -712,6 +723,20 @@ namespace {
 			    bool_value( owner, character_properties_.is_balancing ) ||
 			    bool_value( owner, character_properties_.is_falling_balance ) ||
 			    bool_value( owner, character_properties_.is_pushing );
+			if ( water_states_.contains( owner ) ) {
+				if ( config_.enabled && !blocked ) {
+					apply_properties( movement, state );
+					handle_water_velocity( movement, owner, delta_seconds );
+					return;
+				}
+				water_states_.erase( owner );
+				set_movement_mode( movement, movement_falling );
+			}
+
+			const bool ordinary_mode =
+			    *mode == movement_walking || *mode == movement_falling;
+			const bool special =
+			    fluid || !ordinary_mode || blocked;
 
 			if ( !config_.enabled || special ) {
 				restore_properties( movement, state );
@@ -877,12 +902,25 @@ namespace {
 			}
 		}
 
-		[[nodiscard]] auto should_allow_ladder_crouch( UObject* movement ) const -> bool {
+		[[nodiscard]] auto character_is_swimming( UObject* owner ) const -> bool {
+			if ( !owner ) {
+				return false;
+			}
+			auto** movement_storage = owner->GetValuePtrByPropertyNameInChain< UObject* >( STR( "CharacterMovement" ) );
+			UObject* movement       = movement_storage ? *movement_storage : nullptr;
+			const auto* mode        = property_value< std::uint8_t >( movement, movement_properties_.movement_mode );
+			return water_states_.contains( owner ) ||
+			    ( mode && *mode == movement_swimming ) ||
+			    bool_value( owner, character_properties_.has_water_physics );
+		}
+
+		[[nodiscard]] auto should_allow_goldsrc_crouch( UObject* movement ) const -> bool {
 			if ( !config_.enabled || !movement || !movement_properties_.character_owner ) {
 				return false;
 			}
 			auto** owner_storage = property_value< UObject* >( movement, movement_properties_.character_owner );
-			return owner_storage && *owner_storage && ladder_states_.contains( *owner_storage );
+			return owner_storage && *owner_storage &&
+			    ( ladder_states_.contains( *owner_storage ) || character_is_swimming( *owner_storage ) );
 		}
 
 	private:
@@ -988,6 +1026,8 @@ namespace {
 				        STR( "MaxWalkSpeedCrouched" ) ),
 				.max_sprint_speed =
 				    movement->GetPropertyByNameInChain( STR( "MaxSprintSpeed" ) ),
+				.max_swim_speed =
+				    movement->GetPropertyByNameInChain( STR( "MaxSwimSpeed" ) ),
 				.wants_to_crouch =
 				    bool_property( movement, STR( "bWantsToCrouch" ) ),
 			};
@@ -1008,6 +1048,8 @@ namespace {
 				    bool_property( owner, STR( "IsFallingBalance" ) ),
 				.is_pushing  = bool_property( owner, STR( "IsPushing" ) ),
 				.is_crouched = bool_property( owner, STR( "bIsCrouched" ) ),
+				.has_water_physics =
+				    bool_property( owner, STR( "HasWaterPhysics" ) ),
 				.wants_to_crouch_after_landing =
 				    bool_property( owner, STR( "WantsToCrouchAfterLanding" ) ),
 			};
@@ -1031,6 +1073,96 @@ namespace {
 			    set_movement_mode_function_,
 			    parameters.data( ) );
 			return true;
+		}
+
+		[[nodiscard]] auto movement_is_in_water( UObject* movement, UObject* owner ) -> bool {
+			if ( bool_value( owner, character_properties_.has_water_physics ) ) {
+				return true;
+			}
+			if ( !get_physics_volume_function_ ) {
+				get_physics_volume_function_ = movement->GetFunctionByNameInChain( STR( "GetPhysicsVolume" ) );
+				if ( get_physics_volume_function_ ) {
+					get_physics_volume_return_property_ = get_physics_volume_function_->GetPropertyByNameInChain( STR( "ReturnValue" ) );
+				}
+			}
+			if ( !get_physics_volume_function_ || !get_physics_volume_return_property_ ) {
+				return false;
+			}
+
+			alignas( 16 ) std::array< std::uint8_t, 16 > parameters{ };
+			movement->ProcessEvent( get_physics_volume_function_, parameters.data( ) );
+			auto** volume_storage = get_physics_volume_return_property_->ContainerPtrToValuePtr< UObject* >( parameters.data( ) );
+			UObject* volume       = volume_storage ? *volume_storage : nullptr;
+			if ( !volume ) {
+				return false;
+			}
+			if ( !water_volume_property_ ) {
+				water_volume_property_ = bool_property( volume, STR( "bWaterVolume" ) );
+			}
+			return bool_value( volume, water_volume_property_ );
+		}
+
+		auto handle_water_velocity( UObject* movement, UObject* owner, double delta_seconds ) -> void {
+			auto* velocity         = property_value< FVector >( movement, movement_properties_.velocity );
+			auto* acceleration     = property_value< FVector >( movement, movement_properties_.acceleration );
+			auto* max_acceleration = property_value< float >( movement, movement_properties_.max_acceleration );
+			if ( !velocity || !acceleration || !max_acceleration ) {
+				return;
+			}
+
+			auto*              player_actor       = static_cast< RC::Unreal::AActor* >( owner );
+			auto**             controller_storage = property_value< UObject* >( owner, character_properties_.controller );
+			UObject*           controller         = controller_storage ? *controller_storage : nullptr;
+			const auto*        control_rotation   = controller
+			             ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
+			             : nullptr;
+			const auto         view_rotation      = control_rotation ? *control_rotation : player_actor->K2_GetActorRotation( );
+			const double       view_pitch         = view_rotation.GetPitch( ) * std::numbers::pi / 180.0;
+			const double       view_yaw           = view_rotation.GetYaw( ) * std::numbers::pi / 180.0;
+			const bhop::vec3_t view_forward{
+				std::cos( view_pitch ) * std::cos( view_yaw ),
+				std::cos( view_pitch ) * std::sin( view_yaw ),
+				std::sin( view_pitch ),
+			};
+			const bhop::vec3_t view_right{ -std::sin( view_yaw ), std::cos( view_yaw ), 0.0 };
+
+			const double forward_acceleration =
+			    acceleration->X( ) * view_forward.x +
+			    acceleration->Y( ) * view_forward.y +
+			    acceleration->Z( ) * view_forward.z;
+			const double side_acceleration =
+			    acceleration->X( ) * view_right.x +
+			    acceleration->Y( ) * view_right.y;
+			const double input_threshold      = std::max( 1.0, static_cast< double >( *max_acceleration ) * 0.01 );
+			const auto   forward_input        = forward_input_.find( owner );
+			const auto   side_input           = side_input_.find( owner );
+			const double forward_move         = forward_input != forward_input_.end( )
+			             ? std::clamp( static_cast< double >( forward_input->second ), -1.0, 1.0 )
+			             : ( std::abs( forward_acceleration ) >= input_threshold ? std::copysign( 1.0, forward_acceleration ) : 0.0 );
+			const double side_move = side_input != side_input_.end( )
+			             ? std::clamp( static_cast< double >( side_input->second ), -1.0, 1.0 )
+			             : ( std::abs( side_acceleration ) >= input_threshold ? std::copysign( 1.0, side_acceleration ) : 0.0 );
+			const auto*  jump_key_hold_time   = property_value< float >( owner, character_properties_.jump_key_hold_time );
+			const bool   swim_up              = jump_held_[ owner ] ||
+			    bool_value( owner, character_properties_.pressed_jump ) ||
+			    ( jump_key_hold_time && *jump_key_hold_time > 0.0F );
+			const bool swim_down = !swim_up && bool_value( movement, movement_properties_.wants_to_crouch );
+
+			const auto result = bhop::calculate_water_velocity(
+			    { velocity->X( ), velocity->Y( ), velocity->Z( ) },
+			    {
+			        .view_forward  = view_forward,
+			        .view_right    = view_right,
+			        .forward_move  = forward_move,
+			        .side_move     = side_move,
+			        .up_move       = swim_down ? -1.0 : 0.0,
+			        .delta_seconds = delta_seconds,
+			        .swim_up       = swim_up,
+			    },
+			    config_.move );
+			velocity->SetX( result.x );
+			velocity->SetY( result.y );
+			velocity->SetZ( result.z );
 		}
 
 		[[nodiscard]] auto read_vector_return( UObject* object, UFunction*& function, FProperty*& return_property, const RC::Unreal::TCHAR* function_name ) -> std::optional< bhop::vec3_t > {
@@ -1242,6 +1374,7 @@ namespace {
 
 			auto& movement_state = states_[ movement ];
 			restore_properties( movement, movement_state );
+			water_states_.erase( owner );
 			ladder_states_[ owner ] = ladder_state;
 			if ( !set_movement_mode( movement, movement_flying ) ) {
 				ladder_states_.erase( owner );
@@ -1250,12 +1383,61 @@ namespace {
 			return true;
 		}
 
+		auto update_water_state( UObject* owner ) -> void {
+			if ( !hook_ready_ || !owner ) {
+				return;
+			}
+			auto**   movement_storage = owner->GetValuePtrByPropertyNameInChain< UObject* >( STR( "CharacterMovement" ) );
+			UObject* movement         = movement_storage ? *movement_storage : nullptr;
+			auto*    mode             = property_value< std::uint8_t >( movement, movement_properties_.movement_mode );
+			if ( !movement || !mode ) {
+				return;
+			}
+
+			const bool blocked =
+			    !bool_value( owner, character_properties_.can_move, false ) ||
+			    bool_value( owner, character_properties_.is_dead ) ||
+			    bool_value( owner, character_properties_.is_climbing ) ||
+			    bool_value( owner, character_properties_.is_climbing_ladder ) ||
+			    bool_value( owner, character_properties_.is_balancing ) ||
+			    bool_value( owner, character_properties_.is_falling_balance ) ||
+			    bool_value( owner, character_properties_.is_pushing );
+			const bool in_water = movement_is_in_water( movement, owner );
+			if ( water_states_.contains( owner ) ) {
+				if ( !config_.enabled || blocked || !in_water ) {
+					water_states_.erase( owner );
+					restore_properties( movement, states_[ movement ] );
+					if ( *mode == movement_flying ) {
+						set_movement_mode( movement, movement_falling );
+					}
+				} else if ( *mode != movement_flying ) {
+					set_movement_mode( movement, movement_flying );
+				}
+				return;
+			}
+
+			const bool entered_water =
+			    *mode == movement_swimming ||
+			    bool_value( owner, character_properties_.has_water_physics );
+			if ( !config_.enabled || blocked || !in_water || !entered_water || ladder_states_.contains( owner ) ) {
+				return;
+			}
+
+			restore_properties( movement, states_[ movement ] );
+			water_states_[ owner ] = true;
+			if ( set_movement_mode( movement, movement_flying ) && !water_logged_ ) {
+				RC::Output::send< RC::LogLevel::Normal >( STR( "[bhop] GoldSrc water state active.\n" ) );
+				water_logged_ = true;
+			}
+		}
+
 		auto on_engine_tick( ) -> void {
 			std::vector< UObject* > characters;
 			RC::Unreal::UObjectGlobals::FindAllOf(
 			    STR( "BPCharacter_Demo_C" ),
 			    characters );
 			for ( UObject* character : characters ) {
+				update_water_state( character );
 				if ( config_.enabled && config_.auto_bhop &&
 				     jump_held_[ character ] && character_properties_.pressed_jump ) {
 					character_properties_.pressed_jump
@@ -1276,7 +1458,9 @@ namespace {
 					if ( movement && mode &&
 					     ( *mode == movement_walking ||
 					       *mode == movement_falling ||
-					       ( *mode == movement_flying && ladder_states_.contains( character ) ) ) &&
+					       *mode == movement_swimming ||
+					       ( *mode == movement_flying &&
+					         ( ladder_states_.contains( character ) || water_states_.contains( character ) ) ) ) &&
 					     bool_value(
 					         character,
 					         character_properties_.can_move,
@@ -1358,6 +1542,7 @@ namespace {
 			}
 			register_crouch_hooks( );
 			register_mouse_hooks( );
+			register_movement_input_hooks( );
 
 			UFunction* wrapper =
 			    RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
@@ -1384,7 +1569,6 @@ namespace {
 				    *slot );
 				return;
 			}
-
 			FProperty* updated_component_property = movement->GetPropertyByNameInChain( STR( "UpdatedComponent" ) );
 			const auto can_crouch_slot = updated_component_property
 			           ? resolve_can_crouch_slot(
@@ -1444,7 +1628,10 @@ namespace {
 			auto* sprint = property_value< float >(
 			    movement,
 			    movement_properties_.max_sprint_speed );
-			if ( !gravity || !jump || !walk || !crouch || !sprint ) {
+			auto* swim = property_value< float >(
+			    movement,
+			    movement_properties_.max_swim_speed );
+			if ( !gravity || !jump || !walk || !crouch || !sprint || !swim ) {
 				return;
 			}
 			if ( !state.overriding ) {
@@ -1454,6 +1641,7 @@ namespace {
 				state.max_walk_speed          = *walk;
 				state.max_walk_speed_crouched = *crouch;
 				state.max_sprint_speed        = *sprint;
+				state.max_swim_speed          = *swim;
 			}
 
 			*gravity = static_cast< float >(
@@ -1466,6 +1654,7 @@ namespace {
 			*crouch = static_cast< float >(
 			    fixed_speed * gold_src_crouch_speed_multiplier );
 			*sprint = fixed_speed;
+			*swim   = static_cast< float >( bhop::source_to_cm( config_.move.max_speed ) );
 		}
 
 		auto restore_properties( UObject* movement, movement_state_t& state ) -> void {
@@ -1496,6 +1685,11 @@ namespace {
 			         movement,
 			         movement_properties_.max_sprint_speed ) ) {
 				*value = state.max_sprint_speed;
+			}
+			if ( auto* value = property_value< float >(
+			         movement,
+			         movement_properties_.max_swim_speed ) ) {
+				*value = state.max_swim_speed;
 			}
 			state.overriding = false;
 		}
@@ -1547,7 +1741,7 @@ namespace {
 				if ( event_id == *crouch_press_event_ ) {
 					crouch_held_[ context.Context ]            = true;
 					crouch_release_pending_[ context.Context ] = false;
-				} else if ( ladder_states_.contains( context.Context ) ) {
+				} else if ( ladder_states_.contains( context.Context ) || water_states_.contains( context.Context ) || character_is_swimming( context.Context ) ) {
 					crouch_held_[ context.Context ]            = false;
 					crouch_release_pending_[ context.Context ] = false;
 				} else {
@@ -1565,6 +1759,26 @@ namespace {
 			const auto no_op    = []( RC::Unreal::UnrealScriptFunctionCallableContext&, void* ) {};
 			mouse_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_Turn_K2Node_InputAxisEvent_157" ), callback, no_op, nullptr ) );
 			mouse_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ), callback, no_op, nullptr ) );
+		}
+
+		auto register_movement_input_hooks( ) -> void {
+			const auto forward = [ this ]( RC::Unreal::UnrealScriptFunctionCallableContext& context, void* ) {
+				forward_input_[ context.Context ] = context.GetParams< axis_input_params_t >( ).axis_value;
+			};
+			const auto side = [ this ]( RC::Unreal::UnrealScriptFunctionCallableContext& context, void* ) {
+				side_input_[ context.Context ] = context.GetParams< axis_input_params_t >( ).axis_value;
+			};
+			const auto no_op = []( RC::Unreal::UnrealScriptFunctionCallableContext&, void* ) {};
+			movement_input_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook(
+			    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_MoveForward_K2Node_InputAxisEvent_181" ),
+			    forward,
+			    no_op,
+			    nullptr ) );
+			movement_input_hook_ids_.push_back( RC::Unreal::UObjectGlobals::RegisterHook(
+			    STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_MoveRight_K2Node_InputAxisEvent_192" ),
+			    side,
+			    no_op,
+			    nullptr ) );
 		}
 
 		auto register_ladder_hook( UObject* ladder ) -> void {
@@ -1657,19 +1871,26 @@ namespace {
 		FProperty*                                       ladder_end_return_property_{ };
 		UFunction*                                       box_extent_function_{ };
 		FProperty*                                       box_extent_return_property_{ };
+		UFunction*                                       get_physics_volume_function_{ };
+		FProperty*                                       get_physics_volume_return_property_{ };
+		FBoolProperty*                                   water_volume_property_{ };
 		UObject*                                         input_settings_{ };
 		FBoolProperty*                                   mouse_smoothing_property_{ };
 		UFunction*                                       clear_mouse_smoothing_function_{ };
 		UFunction*                                       ladder_overlap_function_{ };
 		std::unordered_map< UObject*, movement_state_t > states_{ };
 		std::unordered_map< UObject*, ladder_state_t >   ladder_states_{ };
+		std::unordered_map< UObject*, bool >             water_states_{ };
 		std::unordered_map< UObject*, bool >             jump_held_{ };
 		std::unordered_map< UObject*, bool >             crouch_held_{ };
 		std::unordered_map< UObject*, bool >             crouch_release_pending_{ };
+		std::unordered_map< UObject*, float >            forward_input_{ };
+		std::unordered_map< UObject*, float >            side_input_{ };
 		std::optional< int >                             crouch_press_event_{ };
 		std::vector< std::pair< int, int > >             jump_hook_ids_{ };
 		std::vector< std::pair< int, int > >             crouch_hook_ids_{ };
 		std::vector< std::pair< int, int > >             mouse_hook_ids_{ };
+		std::vector< std::pair< int, int > >             movement_input_hook_ids_{ };
 		std::vector< std::pair< int, int > >             ladder_hook_ids_{ };
 		RC::Unreal::Hook::GlobalCallbackId               install_tick_id_{ };
 		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{ };
@@ -1680,6 +1901,7 @@ namespace {
 		bool                                             minhook_initialized_{ };
 		bool                                             original_mouse_smoothing_{ };
 		bool                                             has_original_mouse_smoothing_{ };
+		bool                                             water_logged_{ };
 		double                                           frame_delta_seconds_{ 1.0 / 60.0 };
 	};
 
@@ -1707,7 +1929,7 @@ namespace {
 	}
 
 	bool can_crouch_detour( UObject* movement ) {
-		if ( g_mod && g_mod->should_allow_ladder_crouch( movement ) ) {
+		if ( g_mod && g_mod->should_allow_goldsrc_crouch( movement ) ) {
 			return true;
 		}
 		return g_original_can_crouch && g_original_can_crouch( movement );

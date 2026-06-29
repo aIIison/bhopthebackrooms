@@ -28,6 +28,9 @@ namespace bhop {
 		double bunny_speed_reduction{ 0.65 };
 		double ladder_speed{ 200.0 };
 		double ladder_jump_velocity{ 270.0 };
+		double water_speed_factor{ 0.8 };
+		double water_sink_speed{ 60.0 };
+		double water_swim_up_speed{ 100.0 };
 	};
 
 	struct movement_input_t {
@@ -54,6 +57,16 @@ namespace bhop {
 		bool   detached{ };
 	};
 
+	struct water_input_t {
+		vec3_t view_forward{ };
+		vec3_t view_right{ };
+		double forward_move{ };
+		double side_move{ };
+		double up_move{ };
+		double delta_seconds{ };
+		bool   swim_up{ };
+	};
+
 	[[nodiscard]] auto source_to_cm( double source_units ) noexcept -> double;
 	[[nodiscard]] auto cm_to_source( double centimeters ) noexcept -> double;
 
@@ -69,6 +82,7 @@ namespace bhop {
 	    const move_vars_t& vars ) noexcept -> vec3_t;
 
 	[[nodiscard]] auto calculate_ladder_velocity( const ladder_input_t& input, const move_vars_t& vars ) noexcept -> ladder_result_t;
+	[[nodiscard]] auto calculate_water_velocity( vec3_t velocity_cm, const water_input_t& input, const move_vars_t& vars ) noexcept -> vec3_t;
 
 	[[nodiscard]] auto physics_checksum( const move_vars_t& vars ) -> std::uint64_t;
 	[[nodiscard]] auto checksum_hex( std::uint64_t checksum ) -> std::string;

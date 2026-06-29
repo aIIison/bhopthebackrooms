@@ -104,7 +104,9 @@ namespace bhop {
 		     v.stop_speed < 0.0 || v.jump_velocity <= 0.0 ||
 		     v.air_wish_speed_cap <= 0.0 || v.bunny_max_speed_factor <= 0.0 ||
 		     v.bunny_speed_reduction <= 0.0 || v.bunny_speed_reduction > 1.0 ||
-		     v.ladder_speed <= 0.0 || v.ladder_jump_velocity <= 0.0 ) {
+		     v.ladder_speed <= 0.0 || v.ladder_jump_velocity <= 0.0 ||
+		     v.water_speed_factor <= 0.0 || v.water_speed_factor > 1.0 ||
+		     v.water_sink_speed < 0.0 || v.water_swim_up_speed <= 0.0 ) {
 			return "physics values are outside their supported range";
 		}
 		if ( config.duck_roll_window <= 0.0 ||
@@ -178,6 +180,9 @@ namespace bhop {
 		set_double( result.value.move.bunny_speed_reduction, entries, "movevars.bunnyspeedreduction", error );
 		set_double( result.value.move.ladder_speed, entries, "movevars.ladderspeed", error );
 		set_double( result.value.move.ladder_jump_velocity, entries, "movevars.ladderjumpvelocity", error );
+		set_double( result.value.move.water_speed_factor, entries, "movevars.waterspeedfactor", error );
+		set_double( result.value.move.water_sink_speed, entries, "movevars.watersinkspeed", error );
+		set_double( result.value.move.water_swim_up_speed, entries, "movevars.waterswimupspeed", error );
 
 		if ( !error.empty( ) ) {
 			result.error = std::move( error );

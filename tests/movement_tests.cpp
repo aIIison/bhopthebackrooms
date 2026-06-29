@@ -139,6 +139,39 @@ int main( ) {
 	check( ladder_jump.detached, "Ladder jump detaches" );
 	check( near( cm_to_source( ladder_jump.velocity_cm.x ), 270.0 ), "GoldSrc ladder jump-off speed" );
 
+	const water_input_t idle_water{
+		.view_forward  = { 1.0, 0.0, 0.0 },
+		.view_right    = { 0.0, 1.0, 0.0 },
+		.delta_seconds = 0.1,
+	};
+	const auto sinking = calculate_water_velocity( { }, idle_water, vars );
+	check( near( cm_to_source( sinking.z ), -24.0 ), "GoldSrc idle water sinking" );
+
+	const auto friction_only_water = calculate_water_velocity( { source_to_cm( 100.0 ), 0.0, 0.0 }, idle_water, vars );
+	check( near( cm_to_source( friction_only_water.x ), 60.0 ), "GoldSrc full-vector water friction" );
+	check( near( friction_only_water.z, 0.0 ), "Water acceleration compares against total speed" );
+
+	auto forward_water         = idle_water;
+	forward_water.forward_move = 1.0;
+	const auto water_accel     = calculate_water_velocity( { }, forward_water, vars );
+	check( near( cm_to_source( water_accel.x ), 100.0 ), "GoldSrc water acceleration" );
+
+	auto swim_up       = idle_water;
+	swim_up.swim_up    = true;
+	const auto swimming_up = calculate_water_velocity( { }, swim_up, vars );
+	check( near( cm_to_source( swimming_up.z ), 60.0 ), "GoldSrc water jump impulse precedes friction" );
+
+	auto swim_down      = idle_water;
+	swim_down.up_move   = -1.0;
+	const auto swimming_down = calculate_water_velocity( { }, swim_down, vars );
+	check( near( cm_to_source( swimming_down.z ), -100.0 ), "Water down input" );
+
+	auto shark_input          = swim_up;
+	shark_input.delta_seconds = 0.01;
+	const auto sharking       = calculate_water_velocity( { source_to_cm( 500.0 ), 0.0, 0.0 }, shark_input, vars );
+	check( near( cm_to_source( sharking.x ), 480.0 ), "Sharking retains horizontal speed through water friction" );
+	check( near( cm_to_source( sharking.z ), 96.0 ), "Sharking repeats the water jump impulse" );
+
 	const auto temp = std::filesystem::temp_directory_path( ) / "etb_bhop_test.ini";
 	{
 		std::ofstream ini{ temp };

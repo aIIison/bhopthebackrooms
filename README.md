@@ -48,8 +48,16 @@ and applies the GoldSrc speed reduction, and jumping launches 270 units/s away
 from the surface. Ladder contact is checked continuously, so walking or falling
 onto the top of a ladder attaches without requiring ETB's bottom trigger.
 
-Swimming, balancing, pushing, death/pass-out, ropes, and other scripted/custom
-movement continue to use ETB's native movement.
+Swimming uses GoldSrc's full three-dimensional `PM_WaterMove` behavior:
+camera-pitch movement, 0.8 desired-speed scaling, full-vector friction, the
+60-unit idle sink, the 100-unit swim-up impulse, and its unusual total-speed
+acceleration check. A persistent native water state bypasses Unreal's
+waterline snapping and carries the result through collision-preserving flying
+physics; crossing the volume boundary transfers the unchanged velocity back to
+falling movement. Unreal still supplies collision, prediction, and replication.
+
+Balancing, pushing, death/pass-out, ropes, and other scripted/custom movement
+continue to use ETB's native movement.
 
 Airborne crouching is enabled. Releasing crouch within the configured
 duck-roll window while grounded performs GoldSrc's 18-unit swept origin pop
