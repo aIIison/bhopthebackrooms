@@ -47,16 +47,19 @@ namespace {
 
 	using calc_velocity_fn_t = void ( * )( UObject*, float, float, bool, float );
 	using can_crouch_fn_t     = bool ( * )( UObject* );
+	using physics_volume_changed_fn_t = void ( * )( UObject*, UObject* );
 
 	class c_etb_bhop_mod;
 	c_etb_bhop_mod*    g_mod{ };
 	calc_velocity_fn_t g_original_calc_velocity{ };
 	can_crouch_fn_t     g_original_can_crouch{ };
+	physics_volume_changed_fn_t g_original_physics_volume_changed{ };
 
 	enum class e_pointer_kind : std::uint8_t {
 		unknown,
 		context_object,
 		context_vtable,
+		volume_object,
 	};
 
 	struct movement_properties_t {
@@ -137,6 +140,12 @@ namespace {
 		double half_width_cm{ };
 		double contact_depth_cm{ };
 		bool     on_floor{ };
+	};
+
+	struct water_state_t {
+		bool   submerged{ true };
+		double outside_seconds{ };
+		double outside_limit_seconds{ };
 	};
 
 	template < typename T >
@@ -230,6 +239,34 @@ namespace {
 		for ( const auto reg : volatile_registers ) {
 			kinds[ reg ] = e_pointer_kind::unknown;
 		}
+	}
+
+	[[nodiscard]] auto follow_jump_thunks( void* address ) noexcept -> void* {
+		auto* current = static_cast< std::uint8_t* >( address );
+		for ( int depth = 0; depth < 4 && is_executable_game_address( current ); ++depth ) {
+			ZydisDecoder decoder{ };
+			if ( !ZYAN_SUCCESS( ZydisDecoderInit( &decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64 ) ) ) {
+				break;
+			}
+			ZydisDecodedInstruction instruction{ };
+			ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+			if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, current, 16, &instruction, operands ) ) ||
+			     instruction.mnemonic != ZYDIS_MNEMONIC_JMP ||
+			     operands[ 0 ].type != ZYDIS_OPERAND_TYPE_IMMEDIATE ||
+			     !operands[ 0 ].imm.is_relative ) {
+				break;
+			}
+			ZyanU64 target{ };
+			if ( !ZYAN_SUCCESS( ZydisCalcAbsoluteAddress(
+			         &instruction,
+			         &operands[ 0 ],
+			         reinterpret_cast< ZyanU64 >( current ),
+			         &target ) ) ) {
+				break;
+			}
+			current = reinterpret_cast< std::uint8_t* >( target );
+		}
+		return current;
 	}
 
 	// UE's generated execCalcVelocity wrapper eventually performs
@@ -334,7 +371,7 @@ namespace {
 		if ( candidates.empty( ) && vtable ) {
 			for ( void* target : direct_targets ) {
 				for ( std::size_t slot = 0; slot < 384; ++slot ) {
-					if ( vtable[ slot ] == target ) {
+					if ( follow_jump_thunks( vtable[ slot ] ) == follow_jump_thunks( target ) ) {
 						candidates.push_back( slot );
 					}
 				}
@@ -438,7 +475,7 @@ namespace {
 		const auto ground_slot  = falling_slot + 1;
 
 		std::vector< std::size_t > candidates;
-		std::vector< void* >      visited;
+		std::vector< const void* > visited;
 		for ( std::size_t slot = 0; slot < 384; ++slot ) {
 			auto* code = static_cast< const std::uint8_t* >( vtable[ slot ] );
 			if ( !is_executable_game_address( code ) || std::find( visited.begin( ), visited.end( ), vtable[ slot ] ) != visited.end( ) ) {
@@ -531,6 +568,91 @@ namespace {
 		return candidates.front( );
 	}
 
+	[[nodiscard]] auto resolve_physics_volume_changed_slot( void** vtable, std::int64_t water_volume_offset ) -> std::optional< std::size_t > {
+		if ( !vtable || water_volume_offset < 0 ) {
+			return std::nullopt;
+		}
+
+		ZydisDecoder decoder{ };
+		if ( !ZYAN_SUCCESS( ZydisDecoderInit( &decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64 ) ) ) {
+			return std::nullopt;
+		}
+
+		std::vector< std::size_t > candidates;
+		std::vector< const void* > visited;
+		for ( std::size_t slot = 0; slot < 384; ++slot ) {
+			auto* code = static_cast< const std::uint8_t* >( follow_jump_thunks( vtable[ slot ] ) );
+			if ( !is_executable_game_address( code ) || std::find( visited.begin( ), visited.end( ), code ) != visited.end( ) ) {
+				continue;
+			}
+			visited.push_back( code );
+
+			std::array< e_pointer_kind, ZYDIS_REGISTER_MAX_VALUE + 1 > kinds{ };
+			kinds[ ZYDIS_REGISTER_RCX ] = e_pointer_kind::context_object;
+			kinds[ ZYDIS_REGISTER_RDX ] = e_pointer_kind::volume_object;
+			bool        reads_water_volume{ };
+			bool        uses_swimming_mode{ };
+			bool        reached_return{ };
+			std::size_t offset{ };
+			while ( offset < 768 ) {
+				ZydisDecodedInstruction instruction{ };
+				ZydisDecodedOperand     operands[ ZYDIS_MAX_OPERAND_COUNT ]{ };
+				if ( !ZYAN_SUCCESS( ZydisDecoderDecodeFull( &decoder, code + offset, 768 - offset, &instruction, operands ) ) ) {
+					break;
+				}
+
+				for ( std::uint8_t index = 0; index < instruction.operand_count_visible; ++index ) {
+					const auto& operand = operands[ index ];
+					if ( operand.type == ZYDIS_OPERAND_TYPE_MEMORY &&
+					     operand.mem.base <= ZYDIS_REGISTER_MAX_VALUE &&
+					     kinds[ operand.mem.base ] == e_pointer_kind::volume_object &&
+					     operand.mem.disp.has_displacement &&
+					     operand.mem.disp.value == water_volume_offset ) {
+						reads_water_volume = true;
+					}
+					if ( operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE ) {
+						uses_swimming_mode |= operand.imm.value.u == movement_swimming;
+					}
+				}
+
+				if ( instruction.mnemonic == ZYDIS_MNEMONIC_CALL ) {
+					clear_volatile_pointer_kinds( kinds );
+				} else if ( instruction.mnemonic == ZYDIS_MNEMONIC_MOV && operands[ 0 ].type == ZYDIS_OPERAND_TYPE_REGISTER ) {
+					const auto     destination = operands[ 0 ].reg.value;
+					e_pointer_kind new_kind    = e_pointer_kind::unknown;
+					if ( operands[ 1 ].type == ZYDIS_OPERAND_TYPE_REGISTER ) {
+						new_kind = kinds[ operands[ 1 ].reg.value ];
+					}
+					kinds[ destination ] = new_kind;
+				} else {
+					for ( std::uint8_t index = 0; index < instruction.operand_count_visible; ++index ) {
+						const auto& operand = operands[ index ];
+						if ( operand.type == ZYDIS_OPERAND_TYPE_REGISTER && operand.actions & ZYDIS_OPERAND_ACTION_MASK_WRITE ) {
+							kinds[ operand.reg.value ] = e_pointer_kind::unknown;
+						}
+					}
+				}
+
+				offset += instruction.length;
+				if ( instruction.mnemonic == ZYDIS_MNEMONIC_RET ) {
+					reached_return = true;
+					break;
+				}
+			}
+			if ( reached_return && reads_water_volume && uses_swimming_mode ) {
+				candidates.push_back( slot );
+			}
+		}
+
+		if ( candidates.size( ) != 1 ) {
+			RC::Output::send< RC::LogLevel::Error >(
+			    STR( "[bhop] Refused PhysicsVolumeChanged hook: semantic scan yielded {} candidates.\n" ),
+			    candidates.size( ) );
+			return std::nullopt;
+		}
+		return candidates.front( );
+	}
+
 	void calc_velocity_detour(
 	    UObject* movement,
 	    float    delta_seconds,
@@ -538,6 +660,7 @@ namespace {
 	    bool     fluid,
 	    float    braking_deceleration );
 	bool can_crouch_detour( UObject* movement );
+	void physics_volume_changed_detour( UObject* movement, UObject* new_volume );
 
 	class c_etb_bhop_mod final : public RC::CppUserModBase {
 	public:
@@ -614,6 +737,10 @@ namespace {
 			if ( can_crouch_target_ ) {
 				MH_DisableHook( can_crouch_target_ );
 				MH_RemoveHook( can_crouch_target_ );
+			}
+			if ( physics_volume_changed_target_ ) {
+				MH_DisableHook( physics_volume_changed_target_ );
+				MH_RemoveHook( physics_volume_changed_target_ );
 			}
 			if ( minhook_initialized_ ) {
 				MH_Uninitialize( );
@@ -723,10 +850,14 @@ namespace {
 			    bool_value( owner, character_properties_.is_balancing ) ||
 			    bool_value( owner, character_properties_.is_falling_balance ) ||
 			    bool_value( owner, character_properties_.is_pushing );
-			if ( water_states_.contains( owner ) ) {
+			if ( const auto water = water_states_.find( owner ); water != water_states_.end( ) ) {
 				if ( config_.enabled && !blocked ) {
 					apply_properties( movement, state );
-					handle_water_velocity( movement, owner, delta_seconds );
+					if ( water->second.submerged ) {
+						handle_water_velocity( movement, owner, delta_seconds );
+					} else {
+						handle_water_surface_velocity( movement, owner, delta_seconds );
+					}
 					return;
 				}
 				water_states_.erase( owner );
@@ -921,6 +1052,56 @@ namespace {
 			auto** owner_storage = property_value< UObject* >( movement, movement_properties_.character_owner );
 			return owner_storage && *owner_storage &&
 			    ( ladder_states_.contains( *owner_storage ) || character_is_swimming( *owner_storage ) );
+		}
+
+		[[nodiscard]] auto owns_water_movement( UObject* movement ) const -> bool {
+			if ( !movement || !movement_properties_.character_owner ) {
+				return false;
+			}
+			auto** owner_storage = property_value< UObject* >( movement, movement_properties_.character_owner );
+			return owner_storage && *owner_storage && water_states_.contains( *owner_storage );
+		}
+
+		[[nodiscard]] auto begin_water_movement( UObject* movement, UObject* new_volume ) -> bool {
+			if ( owns_water_movement( movement ) ) {
+				return true;
+			}
+			if ( !config_.enabled || !movement || !new_volume || !movement_properties_.character_owner ) {
+				return false;
+			}
+
+			if ( !water_volume_property_ ) {
+				water_volume_property_ = bool_property( new_volume, STR( "bWaterVolume" ) );
+			}
+			if ( !bool_value( new_volume, water_volume_property_ ) ) {
+				return false;
+			}
+
+			auto** owner_storage = property_value< UObject* >( movement, movement_properties_.character_owner );
+			UObject* owner       = owner_storage ? *owner_storage : nullptr;
+			if ( !owner ||
+			     !bool_value( owner, character_properties_.can_move, false ) ||
+			     bool_value( owner, character_properties_.is_dead ) ||
+			     bool_value( owner, character_properties_.is_climbing ) ||
+			     bool_value( owner, character_properties_.is_climbing_ladder ) ||
+			     bool_value( owner, character_properties_.is_balancing ) ||
+			     bool_value( owner, character_properties_.is_falling_balance ) ||
+			     bool_value( owner, character_properties_.is_pushing ) ||
+			     ladder_states_.contains( owner ) ) {
+				return false;
+			}
+
+			restore_properties( movement, states_[ movement ] );
+			water_states_[ owner ] = { };
+			if ( !set_movement_mode( movement, movement_flying ) ) {
+				water_states_.erase( owner );
+				return false;
+			}
+			if ( !water_logged_ ) {
+				RC::Output::send< RC::LogLevel::Normal >( STR( "[bhop] GoldSrc water state active.\n" ) );
+				water_logged_ = true;
+			}
+			return true;
 		}
 
 	private:
@@ -1165,6 +1346,49 @@ namespace {
 			velocity->SetZ( result.z );
 		}
 
+		auto handle_water_surface_velocity( UObject* movement, UObject* owner, double delta_seconds ) -> void {
+			auto* velocity         = property_value< FVector >( movement, movement_properties_.velocity );
+			auto* acceleration     = property_value< FVector >( movement, movement_properties_.acceleration );
+			auto* max_acceleration = property_value< float >( movement, movement_properties_.max_acceleration );
+			if ( !velocity || !acceleration || !max_acceleration ) {
+				return;
+			}
+
+			auto*              player_actor       = static_cast< RC::Unreal::AActor* >( owner );
+			auto**             controller_storage = property_value< UObject* >( owner, character_properties_.controller );
+			UObject*           controller         = controller_storage ? *controller_storage : nullptr;
+			const auto*        control_rotation   = controller
+			             ? controller->GetValuePtrByPropertyNameInChain< FRotator >( STR( "ControlRotation" ) )
+			             : nullptr;
+			const auto   view_rotation = control_rotation ? *control_rotation : player_actor->K2_GetActorRotation( );
+			const double yaw           = view_rotation.GetYaw( ) * std::numbers::pi / 180.0;
+
+			bhop::vec3_t input_acceleration{ acceleration->X( ), acceleration->Y( ), 0.0 };
+			const auto   forward_input = forward_input_.find( owner );
+			const auto   side_input    = side_input_.find( owner );
+			if ( forward_input != forward_input_.end( ) && side_input != side_input_.end( ) ) {
+				const double forward = std::clamp( static_cast< double >( forward_input->second ), -1.0, 1.0 );
+				const double side    = std::clamp( static_cast< double >( side_input->second ), -1.0, 1.0 );
+				input_acceleration.x = ( std::cos( yaw ) * forward - std::sin( yaw ) * side ) * *max_acceleration;
+				input_acceleration.y = ( std::sin( yaw ) * forward + std::cos( yaw ) * side ) * *max_acceleration;
+			}
+
+			auto result = bhop::calculate_velocity(
+			    { velocity->X( ), velocity->Y( ), velocity->Z( ) },
+			    {
+			        .acceleration_cm           = input_acceleration,
+			        .max_input_acceleration_cm = *max_acceleration,
+			        .delta_seconds             = delta_seconds,
+			        .grounded                  = false,
+			        .jump_queued               = false,
+			    },
+			    config_.move );
+			result.z -= bhop::source_to_cm( config_.move.gravity ) * delta_seconds;
+			velocity->SetX( result.x );
+			velocity->SetY( result.y );
+			velocity->SetZ( result.z );
+		}
+
 		[[nodiscard]] auto read_vector_return( UObject* object, UFunction*& function, FProperty*& return_property, const RC::Unreal::TCHAR* function_name ) -> std::optional< bhop::vec3_t > {
 			if ( !function ) {
 				function = object->GetFunctionByNameInChain( function_name );
@@ -1403,14 +1627,41 @@ namespace {
 			    bool_value( owner, character_properties_.is_falling_balance ) ||
 			    bool_value( owner, character_properties_.is_pushing );
 			const bool in_water = movement_is_in_water( movement, owner );
-			if ( water_states_.contains( owner ) ) {
-				if ( !config_.enabled || blocked || !in_water ) {
+			if ( const auto water = water_states_.find( owner ); water != water_states_.end( ) ) {
+				auto& water_state = water->second;
+				if ( !config_.enabled || blocked ) {
 					water_states_.erase( owner );
 					restore_properties( movement, states_[ movement ] );
 					if ( *mode == movement_flying ) {
 						set_movement_mode( movement, movement_falling );
 					}
-				} else if ( *mode != movement_flying ) {
+					return;
+				}
+
+				if ( in_water ) {
+					water_state.submerged            = true;
+					water_state.outside_seconds       = 0.0;
+					water_state.outside_limit_seconds = 0.0;
+				} else {
+					if ( water_state.submerged ) {
+						const auto* velocity = property_value< FVector >( movement, movement_properties_.velocity );
+						const double upward_speed = velocity ? std::max( 0.0, bhop::cm_to_source( velocity->Z( ) ) ) : 0.0;
+						water_state.outside_limit_seconds =
+						    std::max( 0.1, ( 2.0 * upward_speed / config_.move.gravity ) + 0.05 );
+					}
+					water_state.submerged = false;
+					water_state.outside_seconds += frame_delta_seconds_;
+					if ( water_state.outside_seconds > water_state.outside_limit_seconds ) {
+						water_states_.erase( owner );
+						restore_properties( movement, states_[ movement ] );
+						if ( *mode == movement_flying ) {
+							set_movement_mode( movement, movement_falling );
+						}
+						return;
+					}
+				}
+
+				if ( *mode != movement_flying ) {
 					set_movement_mode( movement, movement_flying );
 				}
 				return;
@@ -1424,7 +1675,7 @@ namespace {
 			}
 
 			restore_properties( movement, states_[ movement ] );
-			water_states_[ owner ] = true;
+			water_states_[ owner ] = { };
 			if ( set_movement_mode( movement, movement_flying ) && !water_logged_ ) {
 				RC::Output::send< RC::LogLevel::Normal >( STR( "[bhop] GoldSrc water state active.\n" ) );
 				water_logged_ = true;
@@ -1589,6 +1840,36 @@ namespace {
 				return;
 			}
 
+			UFunction* physics_volume_wrapper =
+			    RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(
+			        nullptr,
+			        nullptr,
+			        STR( "/Script/Engine.CharacterMovementComponent:PhysicsVolumeChanged" ) );
+			auto physics_volume_slot = resolve_virtual_slot( physics_volume_wrapper, *object_as_vtable, false );
+			if ( !physics_volume_slot ) {
+				UClass* physics_volume_class =
+				    RC::Unreal::UObjectGlobals::StaticFindObject< UClass* >(
+				        nullptr,
+				        nullptr,
+				        STR( "/Script/Engine.PhysicsVolume" ) );
+				FBoolProperty* water_volume_property =
+				    bool_property( physics_volume_class, STR( "bWaterVolume" ) );
+				if ( water_volume_property ) {
+					physics_volume_slot = resolve_physics_volume_changed_slot(
+					    *object_as_vtable,
+					    water_volume_property->GetOffset_Internal( ) );
+				} else {
+					RC::Output::send< RC::LogLevel::Error >(
+					    STR( "[bhop] PhysicsVolumeChanged semantic scan unavailable: bWaterVolume was not found.\n" ) );
+				}
+			}
+			void* physics_volume_target = physics_volume_slot
+			          ? ( *object_as_vtable )[ *physics_volume_slot ]
+			          : nullptr;
+			if ( physics_volume_target && !is_executable_game_address( physics_volume_target ) ) {
+				physics_volume_target = nullptr;
+			}
+
 			if ( MH_Initialize( ) != MH_OK ) {
 				RC::Output::send< RC::LogLevel::Error >(
 				    STR( "[bhop] Native hook disabled: MinHook initialization " )
@@ -1596,10 +1877,21 @@ namespace {
 				return;
 			}
 			minhook_initialized_ = true;
-			if ( MH_CreateHook( target, reinterpret_cast< void* >( &calc_velocity_detour ), reinterpret_cast< void** >( &g_original_calc_velocity ) ) != MH_OK ||
-			     MH_CreateHook( can_crouch_target, reinterpret_cast< void* >( &can_crouch_detour ), reinterpret_cast< void** >( &g_original_can_crouch ) ) != MH_OK ||
-			     MH_EnableHook( target ) != MH_OK ||
-			     MH_EnableHook( can_crouch_target ) != MH_OK ) {
+			bool hook_failed =
+			    MH_CreateHook( target, reinterpret_cast< void* >( &calc_velocity_detour ), reinterpret_cast< void** >( &g_original_calc_velocity ) ) != MH_OK ||
+			    MH_CreateHook( can_crouch_target, reinterpret_cast< void* >( &can_crouch_detour ), reinterpret_cast< void** >( &g_original_can_crouch ) ) != MH_OK;
+			if ( physics_volume_target ) {
+				hook_failed |= MH_CreateHook(
+				                   physics_volume_target,
+				                   reinterpret_cast< void* >( &physics_volume_changed_detour ),
+				                   reinterpret_cast< void** >( &g_original_physics_volume_changed ) ) != MH_OK;
+			}
+			hook_failed |= MH_EnableHook( target ) != MH_OK ||
+			    MH_EnableHook( can_crouch_target ) != MH_OK;
+			if ( physics_volume_target ) {
+				hook_failed |= MH_EnableHook( physics_volume_target ) != MH_OK;
+			}
+			if ( hook_failed ) {
 				RC::Output::send< RC::LogLevel::Error >(
 				    STR( "[bhop] Native hook disabled: movement detours could " )
 				        STR( "not be installed.\n" ) );
@@ -1608,11 +1900,13 @@ namespace {
 
 			hook_target_       = target;
 			can_crouch_target_ = can_crouch_target;
+			physics_volume_changed_target_ = physics_volume_target;
 			hook_ready_        = true;
 			RC::Output::send< RC::LogLevel::Normal >(
-			    STR( "[bhop] Native movement hooks active (CalcVelocity slot {}, CanCrouch slot {}).\n" ),
+			    STR( "[bhop] Native movement hooks active (CalcVelocity slot {}, CanCrouch slot {}, PhysicsVolume slot {}).\n" ),
 			    *slot,
-			    *can_crouch_slot );
+			    *can_crouch_slot,
+			    physics_volume_slot ? std::to_wstring( *physics_volume_slot ) : STR( "unavailable" ) );
 		}
 
 		auto apply_properties( UObject* movement, movement_state_t& state ) -> void {
@@ -1880,7 +2174,7 @@ namespace {
 		UFunction*                                       ladder_overlap_function_{ };
 		std::unordered_map< UObject*, movement_state_t > states_{ };
 		std::unordered_map< UObject*, ladder_state_t >   ladder_states_{ };
-		std::unordered_map< UObject*, bool >             water_states_{ };
+		std::unordered_map< UObject*, water_state_t >    water_states_{ };
 		std::unordered_map< UObject*, bool >             jump_held_{ };
 		std::unordered_map< UObject*, bool >             crouch_held_{ };
 		std::unordered_map< UObject*, bool >             crouch_release_pending_{ };
@@ -1896,6 +2190,7 @@ namespace {
 		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{ };
 		void*                                            hook_target_{ };
 		void*                                            can_crouch_target_{ };
+		void*                                            physics_volume_changed_target_{ };
 		bool                                             install_attempted_{ };
 		bool                                             hook_ready_{ };
 		bool                                             minhook_initialized_{ };
@@ -1933,6 +2228,15 @@ namespace {
 			return true;
 		}
 		return g_original_can_crouch && g_original_can_crouch( movement );
+	}
+
+	void physics_volume_changed_detour( UObject* movement, UObject* new_volume ) {
+		if ( g_mod && g_mod->begin_water_movement( movement, new_volume ) ) {
+			return;
+		}
+		if ( g_original_physics_volume_changed ) {
+			g_original_physics_volume_changed( movement, new_volume );
+		}
 	}
 }  // namespace
 
