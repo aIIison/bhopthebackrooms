@@ -108,6 +108,20 @@ Install Visual Studio 2022 with the C++ desktop workload and CMake 3.22 or
 newer. Clone the ETBCommunity UE4SS fork at its pinned `1.3.0` commit with
 submodules initialized.
 
+The fork currently references a private `ETBCommunity/UEPseudo` submodule.
+Override it with the public upstream before initializing submodules:
+
+```powershell
+git clone https://github.com/ETBCommunity/UE4SS.git C:\path\to\UE4SS
+git -C C:\path\to\UE4SS checkout 0a3cf5ebaf28c9385523b4a651542be6746ed1e9
+git -C C:\path\to\UE4SS config submodule.deps/first/Unreal.url `
+  https://github.com/Re-UE4SS/UEPseudo.git
+git -C C:\path\to\UE4SS submodule update --init --recursive
+```
+
+Do not run `git submodule sync` afterward; it restores the inaccessible URL
+from the fork's `.gitmodules`.
+
 ```powershell
 cmake -S . -B build-native -G "Visual Studio 17 2022" `
   -DBHOP_BUILD_UE4SS_MOD=ON `
