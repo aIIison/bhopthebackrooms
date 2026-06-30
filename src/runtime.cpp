@@ -1,5 +1,6 @@
 #include "hooks.h"
 #include "mod.h"
+#include "util/process.h"
 
 #include <DynamicOutput/DynamicOutput.hpp>
 #include <MinHook.h>
@@ -137,7 +138,7 @@ namespace bhop::native {
 			return;
 		}
 		void* target = ( *object_as_vtable )[ *slot ];
-		if ( !is_executable_game_address( target ) ) {
+		if ( !util::is_executable_game_address( target ) ) {
 			RC::Output::send< RC::LogLevel::Error >(
 			    STR( "[bhop] Native hook disabled: CalcVelocity slot {} " )
 			        STR( "did not point into executable game code.\n" ),
@@ -157,7 +158,7 @@ namespace bhop::native {
 			return;
 		}
 		void* can_crouch_target = ( *object_as_vtable )[ *can_crouch_slot ];
-		if ( !is_executable_game_address( can_crouch_target ) || can_crouch_target == target ) {
+		if ( !util::is_executable_game_address( can_crouch_target ) || can_crouch_target == target ) {
 			RC::Output::send< RC::LogLevel::Error >(
 			    STR( "[bhop] Native hook disabled: CanCrouchInCurrentState slot {} did not validate.\n" ),
 			    *can_crouch_slot );
@@ -190,7 +191,7 @@ namespace bhop::native {
 		void* physics_volume_target = physics_volume_slot
 		    ? ( *object_as_vtable )[ *physics_volume_slot ]
 		    : nullptr;
-		if ( physics_volume_target && !is_executable_game_address( physics_volume_target ) ) {
+		if ( physics_volume_target && !util::is_executable_game_address( physics_volume_target ) ) {
 			physics_volume_target = nullptr;
 		}
 

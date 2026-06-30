@@ -128,6 +128,7 @@ The build stages the distributable DLL at
 
 ```text
 src/                Movement core and UE4SS integration
+src/util/           Process validation and x64 hook-scanning utilities
 tests/              Deterministic movement vectors
 package/bhop/       Ready-to-install mod package
 ```

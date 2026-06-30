@@ -70,6 +70,10 @@ if(BHOP_BUILD_UE4SS_MOD)
         src/mod.h
         src/player.cpp
         src/runtime.cpp
+        src/util/process.cpp
+        src/util/process.h
+        src/util/scanner.cpp
+        src/util/scanner.h
         src/water.cpp
     )
     target_include_directories(etb_bhop PRIVATE src)

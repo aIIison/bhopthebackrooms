@@ -2,6 +2,7 @@
 #include "mod.h"
 
 #include "hooks.h"
+#include "util/process.h"
 
 #include <DynamicOutput/DynamicOutput.hpp>
 #include <MinHook.h>
@@ -86,7 +87,7 @@ namespace bhop::native {
 		if ( !reload_config( ) ) {
 			return;
 		}
-		if ( !validate_game_image( ) ) {
+		if ( !util::validate_game_image( ) ) {
 			RC::Output::send< RC::LogLevel::Error >(
 			    STR( "[bhop] Native hook disabled: Backrooms executable does not match Steam build 23657885.\n" ) );
 			return;
@@ -101,9 +102,9 @@ namespace bhop::native {
 		options.HookName     = STR( "InstallCalcVelocity" );
 		install_tick_id_     = RC::Unreal::Hook::RegisterEngineTickPreCallback(
 		    [ this ]( auto&, RC::Unreal::UEngine*, float delta_seconds, bool ) {
-			frame_delta_seconds_ = delta_seconds;
-			on_engine_tick( );
-		},
+			    frame_delta_seconds_ = delta_seconds;
+			    on_engine_tick( );
+		    },
 		    std::move( options ) );
 
 		RC::Output::send< RC::LogLevel::Normal >(
