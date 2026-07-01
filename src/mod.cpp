@@ -29,7 +29,8 @@ namespace bhop::native {
 		return pressed_jump && jump_key_hold_time && controller && client_updating &&
 		    was_jumping && can_move && is_dead && is_climbing &&
 		    is_climbing_ladder && is_balancing && is_falling_balance &&
-		    is_pushing && is_crouched && has_water_physics &&
+		    is_pushing && is_crouched && should_long_crouch &&
+		    should_scale_crouch && crouch_amount && has_water_physics &&
 		    wants_to_crouch_after_landing;
 	}
 
@@ -65,6 +66,11 @@ namespace bhop::native {
 		unregister_hook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_LookUp_K2Node_InputAxisEvent_172" ), mouse_hook_ids_, 1 );
 		unregister_hook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_MoveForward_K2Node_InputAxisEvent_181" ), movement_input_hook_ids_, 0 );
 		unregister_hook( STR( "/Game/Game/BPCharacter_Demo.BPCharacter_Demo_C:InpAxisEvt_MoveRight_K2Node_InputAxisEvent_192" ), movement_input_hook_ids_, 1 );
+		if ( interact_function_ && !interaction_hook_ids_.empty( ) ) {
+			RC::Unreal::UObjectGlobals::UnregisterHook(
+			    interact_function_,
+			    interaction_hook_ids_.front( ) );
+		}
 		if ( !ladder_hook_ids_.empty( ) ) {
 			RC::Unreal::UObjectGlobals::UnregisterHook( ladder_overlap_function_, ladder_hook_ids_.front( ) );
 		}
@@ -96,6 +102,7 @@ namespace bhop::native {
 		apply_mouse_settings( );
 		register_commands( );
 		register_jump_hooks( );
+		register_interaction_input( );
 
 		RC::Unreal::Hook::FCallbackOptions options{};
 		options.OwnerModName = STR( "bhop" );
@@ -197,6 +204,9 @@ namespace bhop::native {
 			.is_falling_balance            = bool_property( owner, STR( "IsFallingBalance" ) ),
 			.is_pushing                    = bool_property( owner, STR( "IsPushing" ) ),
 			.is_crouched                   = bool_property( owner, STR( "bIsCrouched" ) ),
+			.should_long_crouch             = bool_property( owner, STR( "ShouldLongCrouch" ) ),
+			.should_scale_crouch            = bool_property( owner, STR( "ShouldScaleCrouch" ) ),
+			.crouch_amount                  = owner->GetPropertyByNameInChain( STR( "CrouchAmount" ) ),
 			.has_water_physics             = bool_property( owner, STR( "HasWaterPhysics" ) ),
 			.wants_to_crouch_after_landing = bool_property( owner, STR( "WantsToCrouchAfterLanding" ) ),
 		};

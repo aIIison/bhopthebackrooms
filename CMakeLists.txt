@@ -65,6 +65,7 @@ if(BHOP_BUILD_UE4SS_MOD)
         src/hooks.cpp
         src/hooks.h
         src/input.cpp
+        src/interaction.cpp
         src/ladder.cpp
         src/mod.cpp
         src/mod.h

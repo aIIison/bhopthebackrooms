@@ -8,6 +8,7 @@
 #include <Unreal/Hooks/Hooks.hpp>
 #include <Unreal/UObject.hpp>
 #include <Unreal/UnrealCoreStructs.hpp>
+#include <atomic>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -70,6 +71,9 @@ namespace bhop::native {
 		FBoolProperty* is_falling_balance{};
 		FBoolProperty* is_pushing{};
 		FBoolProperty* is_crouched{};
+		FBoolProperty* should_long_crouch{};
+		FBoolProperty* should_scale_crouch{};
+		FProperty*     crouch_amount{};
 		FBoolProperty* has_water_physics{};
 		FBoolProperty* wants_to_crouch_after_landing{};
 
@@ -112,6 +116,18 @@ namespace bhop::native {
 		bool   submerged{ true };
 		double outside_seconds{};
 		double outside_limit_seconds{};
+	};
+
+	struct interaction_override_t {
+		std::size_t  depth{};
+		UObject*     movement{};
+		std::uint8_t movement_mode{};
+		bool         pressed_jump{};
+		bool         crouched{};
+		bool         wants_to_crouch{};
+		bool         should_long_crouch{};
+		bool         should_scale_crouch{};
+		float        crouch_amount{};
 	};
 
 	template < typename T >
@@ -175,6 +191,11 @@ namespace bhop::native {
 		auto register_crouch_event( const RC::StringType& path, int event_id ) -> void;
 		auto register_mouse_hooks( ) -> void;
 		auto register_movement_input_hooks( ) -> void;
+		auto register_interaction_input( ) -> void;
+		auto register_interaction_hooks( UObject* character ) -> void;
+		auto begin_interaction_override( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
+		auto end_interaction_override( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
+		[[nodiscard]] auto try_airborne_interaction( UObject* character ) -> bool;
 		auto register_ladder_hook( UObject* ladder ) -> void;
 		auto correct_mouse_input( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
 		auto register_commands( ) -> void;
@@ -200,6 +221,9 @@ namespace bhop::native {
 		FBoolProperty*                                   mouse_smoothing_property_{};
 		UFunction*                                       clear_mouse_smoothing_function_{};
 		UFunction*                                       ladder_overlap_function_{};
+		FProperty*                                       current_interactable_property_{};
+		UFunction*                                       interact_function_{};
+		FProperty*                                       interact_actor_property_{};
 		std::unordered_map< UObject*, movement_state_t > states_{};
 		std::unordered_map< UObject*, ladder_state_t >   ladder_states_{};
 		std::unordered_map< UObject*, water_state_t >    water_states_{};
@@ -208,11 +232,13 @@ namespace bhop::native {
 		std::unordered_map< UObject*, bool >             crouch_release_pending_{};
 		std::unordered_map< UObject*, float >            forward_input_{};
 		std::unordered_map< UObject*, float >            side_input_{};
+		std::unordered_map< UObject*, interaction_override_t > interaction_overrides_{};
 		std::optional< int >                             crouch_press_event_{};
 		std::vector< std::pair< int, int > >             jump_hook_ids_{};
 		std::vector< std::pair< int, int > >             crouch_hook_ids_{};
 		std::vector< std::pair< int, int > >             mouse_hook_ids_{};
 		std::vector< std::pair< int, int > >             movement_input_hook_ids_{};
+		std::vector< std::pair< int, int > >             interaction_hook_ids_{};
 		std::vector< std::pair< int, int > >             ladder_hook_ids_{};
 		RC::Unreal::Hook::GlobalCallbackId               install_tick_id_{};
 		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{};
@@ -225,6 +251,7 @@ namespace bhop::native {
 		bool                                             original_mouse_smoothing_{};
 		bool                                             has_original_mouse_smoothing_{};
 		bool                                             water_logged_{};
+		std::atomic_bool                                 interaction_pressed_{};
 		double                                           frame_delta_seconds_{ 1.0 / 60.0 };
 	};
 

@@ -12,6 +12,15 @@ namespace bhop::native {
 		RC::Unreal::UObjectGlobals::FindAllOf(
 		    STR( "BPCharacter_Demo_C" ),
 		    characters );
+		// ETB already dispatches grounded interaction. The raw key path is
+		// only needed while falling, where ETB suppresses its action event.
+		if ( interaction_pressed_.exchange( false ) && interact_function_ ) {
+			for ( UObject* character : characters ) {
+				if ( try_airborne_interaction( character ) ) {
+					break;
+				}
+			}
+		}
 		for ( UObject* character : characters ) {
 			update_water_state( character );
 			if ( config_.enabled && config_.auto_bhop &&
@@ -119,6 +128,7 @@ namespace bhop::native {
 		register_crouch_hooks( );
 		register_mouse_hooks( );
 		register_movement_input_hooks( );
+		register_interaction_hooks( character );
 
 		UFunction* wrapper =
 		    RC::Unreal::UObjectGlobals::StaticFindObject< UFunction* >(

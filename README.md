@@ -12,6 +12,7 @@ stairs, moving platforms, prediction, replication, and server correction.
 - GoldSrc ground and air movement
 - Hold-to-bhop with the CS 1.6 speed cap
 - Air crouching and duck rolling
+- Interaction while jumping or crouching
 - GoldSrc ladder movement, ladder strafing, and jump-off velocity
 - GoldSrc water movement, including swimming, sinking, and sharking
 - Frame-rate-independent mouse input based on ETB's 120 FPS sensitivity
