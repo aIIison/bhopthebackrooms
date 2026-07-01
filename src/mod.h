@@ -8,8 +8,8 @@
 #include <Unreal/Hooks/Hooks.hpp>
 #include <Unreal/UObject.hpp>
 #include <Unreal/UnrealCoreStructs.hpp>
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -186,73 +186,73 @@ namespace bhop::native {
 		auto apply_properties( UObject* movement, movement_state_t& state ) -> void;
 		auto restore_properties( UObject* movement, movement_state_t& state ) -> void;
 
-		auto register_jump_hooks( ) -> void;
-		auto register_crouch_hooks( ) -> void;
-		auto register_crouch_event( const RC::StringType& path, int event_id ) -> void;
-		auto register_mouse_hooks( ) -> void;
-		auto register_movement_input_hooks( ) -> void;
-		auto register_interaction_input( ) -> void;
-		auto register_interaction_hooks( UObject* character ) -> void;
-		auto begin_interaction_override( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
-		auto end_interaction_override( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
+		auto               register_jump_hooks( ) -> void;
+		auto               register_crouch_hooks( ) -> void;
+		auto               register_crouch_event( const RC::StringType& path, int event_id ) -> void;
+		auto               register_mouse_hooks( ) -> void;
+		auto               register_movement_input_hooks( ) -> void;
+		auto               register_interaction_input( ) -> void;
+		auto               register_interaction_hooks( UObject* character ) -> void;
+		auto               begin_interaction_override( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
+		auto               end_interaction_override( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
 		[[nodiscard]] auto try_airborne_interaction( UObject* character ) -> bool;
-		auto register_ladder_hook( UObject* ladder ) -> void;
-		auto correct_mouse_input( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
-		auto register_commands( ) -> void;
+		auto               register_ladder_hook( UObject* ladder ) -> void;
+		auto               correct_mouse_input( RC::Unreal::UnrealScriptFunctionCallableContext& context ) -> void;
+		auto               register_commands( ) -> void;
 
-		config_t                                         config_{};
-		std::filesystem::path                            config_path_{};
-		movement_properties_t                            movement_properties_{};
-		character_properties_t                           character_properties_{};
-		UClass*                                          character_class_{};
-		UFunction*                                       set_movement_mode_function_{};
-		FProperty*                                       set_movement_mode_property_{};
-		FProperty*                                       mouse_delta_seconds_property_{};
-		UFunction*                                       ladder_start_function_{};
-		FProperty*                                       ladder_start_return_property_{};
-		UFunction*                                       ladder_end_function_{};
-		FProperty*                                       ladder_end_return_property_{};
-		UFunction*                                       box_extent_function_{};
-		FProperty*                                       box_extent_return_property_{};
-		UFunction*                                       get_physics_volume_function_{};
-		FProperty*                                       get_physics_volume_return_property_{};
-		FBoolProperty*                                   water_volume_property_{};
-		UObject*                                         input_settings_{};
-		FBoolProperty*                                   mouse_smoothing_property_{};
-		UFunction*                                       clear_mouse_smoothing_function_{};
-		UFunction*                                       ladder_overlap_function_{};
-		FProperty*                                       current_interactable_property_{};
-		UFunction*                                       interact_function_{};
-		FProperty*                                       interact_actor_property_{};
-		std::unordered_map< UObject*, movement_state_t > states_{};
-		std::unordered_map< UObject*, ladder_state_t >   ladder_states_{};
-		std::unordered_map< UObject*, water_state_t >    water_states_{};
-		std::unordered_map< UObject*, bool >             jump_held_{};
-		std::unordered_map< UObject*, bool >             crouch_held_{};
-		std::unordered_map< UObject*, bool >             crouch_release_pending_{};
-		std::unordered_map< UObject*, float >            forward_input_{};
-		std::unordered_map< UObject*, float >            side_input_{};
+		config_t                                               config_{};
+		std::filesystem::path                                  config_path_{};
+		movement_properties_t                                  movement_properties_{};
+		character_properties_t                                 character_properties_{};
+		UClass*                                                character_class_{};
+		UFunction*                                             set_movement_mode_function_{};
+		FProperty*                                             set_movement_mode_property_{};
+		FProperty*                                             mouse_delta_seconds_property_{};
+		UFunction*                                             ladder_start_function_{};
+		FProperty*                                             ladder_start_return_property_{};
+		UFunction*                                             ladder_end_function_{};
+		FProperty*                                             ladder_end_return_property_{};
+		UFunction*                                             box_extent_function_{};
+		FProperty*                                             box_extent_return_property_{};
+		UFunction*                                             get_physics_volume_function_{};
+		FProperty*                                             get_physics_volume_return_property_{};
+		FBoolProperty*                                         water_volume_property_{};
+		UObject*                                               input_settings_{};
+		FBoolProperty*                                         mouse_smoothing_property_{};
+		UFunction*                                             clear_mouse_smoothing_function_{};
+		UFunction*                                             ladder_overlap_function_{};
+		FProperty*                                             current_interactable_property_{};
+		UFunction*                                             interact_function_{};
+		FProperty*                                             interact_actor_property_{};
+		std::unordered_map< UObject*, movement_state_t >       states_{};
+		std::unordered_map< UObject*, ladder_state_t >         ladder_states_{};
+		std::unordered_map< UObject*, water_state_t >          water_states_{};
+		std::unordered_map< UObject*, bool >                   jump_held_{};
+		std::unordered_map< UObject*, bool >                   crouch_held_{};
+		std::unordered_map< UObject*, bool >                   crouch_release_pending_{};
+		std::unordered_map< UObject*, float >                  forward_input_{};
+		std::unordered_map< UObject*, float >                  side_input_{};
 		std::unordered_map< UObject*, interaction_override_t > interaction_overrides_{};
-		std::optional< int >                             crouch_press_event_{};
-		std::vector< std::pair< int, int > >             jump_hook_ids_{};
-		std::vector< std::pair< int, int > >             crouch_hook_ids_{};
-		std::vector< std::pair< int, int > >             mouse_hook_ids_{};
-		std::vector< std::pair< int, int > >             movement_input_hook_ids_{};
-		std::vector< std::pair< int, int > >             interaction_hook_ids_{};
-		std::vector< std::pair< int, int > >             ladder_hook_ids_{};
-		RC::Unreal::Hook::GlobalCallbackId               install_tick_id_{};
-		RC::Unreal::Hook::GlobalCallbackId               console_hook_id_{};
-		void*                                            hook_target_{};
-		void*                                            can_crouch_target_{};
-		void*                                            physics_volume_changed_target_{};
-		bool                                             install_attempted_{};
-		bool                                             hook_ready_{};
-		bool                                             minhook_initialized_{};
-		bool                                             original_mouse_smoothing_{};
-		bool                                             has_original_mouse_smoothing_{};
-		bool                                             water_logged_{};
-		std::atomic_bool                                 interaction_pressed_{};
-		double                                           frame_delta_seconds_{ 1.0 / 60.0 };
+		std::optional< int >                                   crouch_press_event_{};
+		std::vector< std::pair< int, int > >                   jump_hook_ids_{};
+		std::vector< std::pair< int, int > >                   crouch_hook_ids_{};
+		std::vector< std::pair< int, int > >                   mouse_hook_ids_{};
+		std::vector< std::pair< int, int > >                   movement_input_hook_ids_{};
+		std::vector< std::pair< int, int > >                   interaction_hook_ids_{};
+		std::vector< std::pair< int, int > >                   ladder_hook_ids_{};
+		RC::Unreal::Hook::GlobalCallbackId                     install_tick_id_{};
+		RC::Unreal::Hook::GlobalCallbackId                     console_hook_id_{};
+		void*                                                  hook_target_{};
+		void*                                                  can_crouch_target_{};
+		void*                                                  physics_volume_changed_target_{};
+		bool                                                   install_attempted_{};
+		bool                                                   hook_ready_{};
+		bool                                                   minhook_initialized_{};
+		bool                                                   original_mouse_smoothing_{};
+		bool                                                   has_original_mouse_smoothing_{};
+		bool                                                   water_logged_{};
+		std::atomic_bool                                       interaction_pressed_{};
+		double                                                 frame_delta_seconds_{ 1.0 / 60.0 };
 	};
 
 	void calc_velocity_detour( UObject*, float, float, bool, float );

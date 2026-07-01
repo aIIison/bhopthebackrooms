@@ -37,8 +37,8 @@ namespace bhop::native {
 		}
 
 		[[nodiscard]] auto configured_interact_key( ) -> std::pair< RC::Input::Key, std::string > {
-			wchar_t*    local_app_data{ };
-			std::size_t local_app_data_length{ };
+			wchar_t*    local_app_data{};
+			std::size_t local_app_data_length{};
 			if ( _wdupenv_s( &local_app_data, &local_app_data_length, L"LOCALAPPDATA" ) == 0 &&
 			     local_app_data ) {
 				auto path = std::filesystem::path{ local_app_data } /
@@ -69,9 +69,9 @@ namespace bhop::native {
 	auto c_etb_bhop_mod::register_interaction_input( ) -> void {
 		const auto [ key, name ] = configured_interact_key( );
 		const auto callback      = [ this ] {
-            // UE4SS pumps physical input outside Unreal's game thread.
-            // Defer all UObject access to the next engine tick.
-            interaction_pressed_.store( true );
+			// UE4SS pumps physical input outside Unreal's game thread.
+			// Defer all UObject access to the next engine tick.
+			interaction_pressed_.store( true );
 		};
 		register_keydown_event( key, callback );
 		for ( const auto modifiers : {
@@ -147,7 +147,7 @@ namespace bhop::native {
 			return;
 		}
 
-		auto& state = interaction_overrides_[ context.Context ];
+		auto& state               = interaction_overrides_[ context.Context ];
 		state.depth               = 1;
 		state.movement            = movement;
 		state.movement_mode       = *movement_mode;
@@ -219,7 +219,7 @@ namespace bhop::native {
 			return false;
 		}
 
-		std::array< std::uint8_t, 16 > parameters{ };
+		std::array< std::uint8_t, 16 > parameters{};
 		*interact_actor_property_->ContainerPtrToValuePtr< UObject* >(
 		    parameters.data( ) ) = target;
 		character->ProcessEvent( interact_function_, parameters.data( ) );

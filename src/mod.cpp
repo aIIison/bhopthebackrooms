@@ -204,9 +204,9 @@ namespace bhop::native {
 			.is_falling_balance            = bool_property( owner, STR( "IsFallingBalance" ) ),
 			.is_pushing                    = bool_property( owner, STR( "IsPushing" ) ),
 			.is_crouched                   = bool_property( owner, STR( "bIsCrouched" ) ),
-			.should_long_crouch             = bool_property( owner, STR( "ShouldLongCrouch" ) ),
-			.should_scale_crouch            = bool_property( owner, STR( "ShouldScaleCrouch" ) ),
-			.crouch_amount                  = owner->GetPropertyByNameInChain( STR( "CrouchAmount" ) ),
+			.should_long_crouch            = bool_property( owner, STR( "ShouldLongCrouch" ) ),
+			.should_scale_crouch           = bool_property( owner, STR( "ShouldScaleCrouch" ) ),
+			.crouch_amount                 = owner->GetPropertyByNameInChain( STR( "CrouchAmount" ) ),
 			.has_water_physics             = bool_property( owner, STR( "HasWaterPhysics" ) ),
 			.wants_to_crouch_after_landing = bool_property( owner, STR( "WantsToCrouchAfterLanding" ) ),
 		};
